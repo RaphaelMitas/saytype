@@ -19,7 +19,7 @@ pnpm tauri build
 cd sidecar && ./build.sh
 ```
 
-Prerequisites: `brew install sox` for audio recording.
+No external dependencies required - uses native CPAL for audio recording.
 
 ## Architecture
 
@@ -27,7 +27,7 @@ Prerequisites: `brew install sox` for audio recording.
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Recording Flow                            │
 ├─────────────────────────────────────────────────────────────────┤
-│ Hotkey (Right Cmd)  →  sox recording  →  Sidecar (Parakeet)     │
+│ Hotkey (Right Cmd)  →  CPAL recording  →  Sidecar (Parakeet)    │
 │      hotkey.rs           audio.rs          sidecar.rs           │
 │                                                 ↓                │
 │ Frontend event  ←  Tauri emit  ←  Clipboard paste               │
@@ -39,7 +39,7 @@ Prerequisites: `brew install sox` for audio recording.
 
 1. **Tauri/Rust** (`src-tauri/src/`) - System integration layer
    - Hotkey capture via macOS CGEventTap (runs on dedicated CFRunLoop thread)
-   - Audio recording via `sox` shell command (16kHz WAV output)
+   - Audio recording via native CPAL (16kHz WAV output)
    - Text insertion via clipboard + AppleScript keystroke simulation
    - Sidecar lifecycle management via stdin/stdout JSON IPC
 
@@ -59,7 +59,7 @@ Prerequisites: `brew install sox` for audio recording.
 |--------|---------------|
 | `lib.rs` | AppState, Tauri commands, app setup/builder |
 | `hotkey.rs` | Right Cmd key detection (keycode 54), AtomicBool state |
-| `audio.rs` | sox process management, sample rate conversion |
+| `audio.rs` | CPAL audio capture, sample rate conversion |
 | `sidecar.rs` | Sidecar spawn, JSON IPC, cross-platform binary lookup |
 | `text_insertion.rs` | Clipboard save/restore, `AXIsProcessTrusted()` check |
 | `tray.rs` | Menu bar icon, recording state indicator |
