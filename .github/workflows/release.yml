@@ -43,6 +43,19 @@ jobs:
       - name: Build Tauri app
         run: pnpm tauri build
 
+      - name: Sign app and sidecar
+        run: |
+          APP_PATH="src-tauri/target/release/bundle/macos/Saytype.app"
+
+          # Sign the sidecar binary first (must be signed before main app)
+          codesign --force --deep --sign - "$APP_PATH/Contents/MacOS/transcribe-server-aarch64-apple-darwin"
+
+          # Sign the main app with entitlements
+          codesign --force --deep --sign - --entitlements src-tauri/entitlements.plist "$APP_PATH"
+
+          # Verify signing succeeded
+          codesign --verify --verbose "$APP_PATH"
+
       - name: Extract version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
