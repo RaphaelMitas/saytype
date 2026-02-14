@@ -43,18 +43,62 @@ jobs:
       - name: Build Tauri app
         run: pnpm tauri build
 
-      - name: Sign app and sidecar
+      - name: Import certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import certificate
+          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
+          security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # Find signing identity
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+          echo "SIGNING_IDENTITY=$IDENTITY" >> $GITHUB_ENV
+
+      - name: Sign app
         run: |
           APP_PATH="src-tauri/target/release/bundle/macos/Saytype.app"
 
-          # Sign the sidecar binary first (must be signed before main app)
-          codesign --force --sign - "$APP_PATH/Contents/MacOS/transcribe-server"
+          # Sign the sidecar binary first
+          codesign --force --options runtime --sign "$SIGNING_IDENTITY" "$APP_PATH/Contents/MacOS/transcribe-server"
 
-          # Sign the main app with entitlements
-          codesign --force --deep --sign - --entitlements src-tauri/entitlements.plist "$APP_PATH"
+          # Sign the main app with entitlements and hardened runtime
+          codesign --force --deep --options runtime --sign "$SIGNING_IDENTITY" --entitlements src-tauri/entitlements.plist "$APP_PATH"
 
-          # Verify signing succeeded
+          # Verify signing
           codesign --verify --verbose "$APP_PATH"
+
+      - name: Notarize app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APP_PATH="src-tauri/target/release/bundle/macos/Saytype.app"
+
+          # Create zip for notarization
+          ditto -c -k --keepParent "$APP_PATH" "$RUNNER_TEMP/Saytype-notarize.zip"
+
+          # Submit for notarization
+          xcrun notarytool submit "$RUNNER_TEMP/Saytype-notarize.zip" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          # Staple the notarization ticket
+          xcrun stapler staple "$APP_PATH"
 
       - name: Extract version from tag
         id: version
