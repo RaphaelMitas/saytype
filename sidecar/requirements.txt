@@ -1,0 +1,11 @@
+# Saytype Sidecar Dependencies
+
+# Parakeet MLX for Apple Silicon optimized transcription
+# State-of-the-art accuracy, optimized for Apple Silicon via MLX
+parakeet-mlx>=0.3.0
+
+# Soundfile for loading WAV audio without FFmpeg dependency
+soundfile>=0.12.0
+
+# PyInstaller for building standalone executable
+pyinstaller>=6.0.0

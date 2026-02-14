@@ -1,0 +1,48 @@
+[package]
+name = "saytype"
+version = "0.1.0"
+description = "A macOS push-to-talk speech-to-text app"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "saytype_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-opener = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# macOS-specific dependencies for hotkey detection and text insertion
+core-graphics = "0.25"
+core-foundation = "0.10"
+core-foundation-sys = "0.8"
+enigo = "0.6"
+arboard = "3"
+
+# Async runtime
+tokio = { version = "1", features = ["sync", "fs", "process", "macros", "rt"] }
+
+# Audio recording
+cpal = "0.15"
+hound = "3.5"
+rubato = "0.15"
+
+# Temporary file handling
+tempfile = "3"
+
+# Lazy initialization
+lazy_static = "1.5"
+
+# Unix signal handling
+libc = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.26"
+objc2 = "0.6"
