@@ -370,6 +370,21 @@ button:disabled {
   background: var(--warning-color);
 }
 
+.skip-link {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.skip-link a {
+  color: var(--text-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.skip-link a:hover {
+  color: var(--text-color);
+}
+
 /* Test section */
 .test-section .button-group {
   margin-bottom: 12px;
