@@ -46,6 +46,11 @@ export function useRecording(): UseRecordingResult {
       setLastError(event.payload);
     });
 
+    const unlistenSidecarError = listen<string>("sidecar-error", (event) => {
+      setState("idle");
+      setLastError(event.payload);
+    });
+
     // Cleanup listeners on unmount
     return () => {
       unlistenSidecarReady.then((fn) => fn());
@@ -53,6 +58,7 @@ export function useRecording(): UseRecordingResult {
       unlistenTranscriptionStarted.then((fn) => fn());
       unlistenTranscriptionComplete.then((fn) => fn());
       unlistenTranscriptionError.then((fn) => fn());
+      unlistenSidecarError.then((fn) => fn());
     };
   }, []);
 

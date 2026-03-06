@@ -2,8 +2,10 @@ mod app_nap;
 mod audio;
 mod config;
 mod hotkey;
+mod remote;
 mod sidecar;
 mod text_insertion;
+mod transcriber;
 mod tray;
 
 use std::sync::Arc;
@@ -73,7 +75,7 @@ async fn transcribe_audio(
     audio_path: String,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
-    sidecar::transcribe(&app_handle, &audio_path).await
+    transcriber::transcribe(&app_handle, &audio_path).await
 }
 
 #[tauri::command]
@@ -89,7 +91,7 @@ async fn test_stop_and_transcribe(app_handle: tauri::AppHandle) -> Result<String
     println!("[TEST] Audio saved to: {}", audio_path);
 
     println!("[TEST] Starting transcription...");
-    let result = sidecar::transcribe(&app_handle, &audio_path).await?;
+    let result = transcriber::transcribe(&app_handle, &audio_path).await?;
     println!("[TEST] Transcription result: {}", result);
 
     // Clean up
@@ -101,6 +103,26 @@ async fn test_stop_and_transcribe(app_handle: tauri::AppHandle) -> Result<String
 #[tauri::command]
 async fn quit_app(app_handle: tauri::AppHandle) {
     app_handle.exit(0);
+}
+
+/// Restarts the app. Returns true if restarting, false if in dev mode (manual restart needed).
+#[tauri::command]
+async fn restart_app() -> Result<bool, String> {
+    if cfg!(debug_assertions) {
+        // Dev mode: can't restart because the Tauri CLI owns the process lifecycle
+        return Ok(false);
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        let exe_str = exe.to_string_lossy().to_string();
+        if let Some(app_end) = exe_str.find(".app/") {
+            let app_path = &exe_str[..app_end + 4];
+            let _ = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(format!("sleep 0.5 && open -n '{}'", app_path))
+                .spawn();
+        }
+    }
+    std::process::exit(0);
 }
 
 #[tauri::command]
@@ -213,7 +235,7 @@ async fn test_sidecar(app_handle: tauri::AppHandle) -> Result<String, String> {
     println!("[TEST] Created test WAV at {}", test_path);
 
     // Try to transcribe
-    match sidecar::transcribe(&app_handle, test_path).await {
+    match transcriber::transcribe(&app_handle, test_path).await {
         Ok(text) => {
             let _ = std::fs::remove_file(test_path);
             Ok(format!("Sidecar working! Got: '{}'", text))
@@ -223,6 +245,39 @@ async fn test_sidecar(app_handle: tauri::AppHandle) -> Result<String, String> {
             Err(format!("Sidecar error: {}", e))
         }
     }
+}
+
+#[tauri::command]
+async fn get_local_ip() -> Result<String, String> {
+    // Connect a UDP socket to a public address to determine the local IP
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
+    socket.connect("8.8.8.8:80").map_err(|e| e.to_string())?;
+    let addr = socket.local_addr().map_err(|e| e.to_string())?;
+    Ok(addr.ip().to_string())
+}
+
+#[tauri::command]
+async fn get_network_config() -> Result<serde_json::Value, String> {
+    let config = config::load_config();
+    Ok(serde_json::json!({
+        "mode": config.mode,
+        "server_url": config.server_url,
+        "server_port": config.server_port,
+    }))
+}
+
+#[tauri::command]
+async fn set_network_config(mode: config::AppMode, server_url: Option<String>, server_port: Option<u16>) -> Result<(), String> {
+    let mut config = config::load_config();
+    config.mode = mode;
+    config.server_url = server_url;
+    config.server_port = server_port;
+    config::save_config(&config)
+}
+
+#[tauri::command]
+async fn test_remote_connection(server_url: String) -> Result<bool, String> {
+    remote::check_health(&server_url).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -237,9 +292,16 @@ pub fn run() {
         .manage(app_state)
         .setup(|app| {
             let app_handle = app.handle().clone();
+            let app_config = config::load_config();
+            let is_server_only = app_config.mode == config::AppMode::ServerOnly;
 
             // Initialize system tray
-            tray::setup_tray(&app_handle)?;
+            if is_server_only {
+                let port = app_config.server_port.unwrap_or(8765);
+                tray::setup_tray_with_tooltip(&app_handle, &format!("Saytype - Server :{}", port))?;
+            } else {
+                tray::setup_tray(&app_handle)?;
+            }
 
             // Open settings window on launch
             if let Some(window) = app.get_webview_window("settings") {
@@ -247,30 +309,35 @@ pub fn run() {
                 let _ = window.set_focus();
             }
 
-            // Check accessibility permission before starting hotkey listener
-            if !text_insertion::check_accessibility_permission() {
-                println!("[HOTKEY] Accessibility permission not granted. Hotkey listener will not work.");
-                let _ = app_handle.emit("accessibility-required", ());
+            if !is_server_only {
+                // Check accessibility permission before starting hotkey listener
+                if !text_insertion::check_accessibility_permission() {
+                    println!("[HOTKEY] Accessibility permission not granted. Hotkey listener will not work.");
+                    let _ = app_handle.emit("accessibility-required", ());
+                }
+
+                // Disable App Nap to ensure event delivery when backgrounded
+                if let Err(e) = app_nap::disable_app_nap() {
+                    eprintln!("[APP_NAP] Warning: Failed to disable App Nap: {}", e);
+                }
+
+                // Set up event tap on main run loop (no separate thread needed)
+                println!("[HOTKEY] Setting up event tap on main run loop...");
+                if let Err(e) = hotkey::setup_event_tap(app_handle.clone()) {
+                    eprintln!("[HOTKEY] Failed to set up event tap: {}", e);
+                    let _ = app_handle.emit("hotkey-error", e);
+                }
+            } else {
+                println!("[SETUP] Server-only mode — skipping hotkey and permissions setup");
             }
 
-            // Disable App Nap to ensure event delivery when backgrounded
-            if let Err(e) = app_nap::disable_app_nap() {
-                eprintln!("[APP_NAP] Warning: Failed to disable App Nap: {}", e);
-            }
-
-            // Set up event tap on main run loop (no separate thread needed)
-            println!("[HOTKEY] Setting up event tap on main run loop...");
-            if let Err(e) = hotkey::setup_event_tap(app_handle.clone()) {
-                eprintln!("[HOTKEY] Failed to set up event tap: {}", e);
-                let _ = app_handle.emit("hotkey-error", e);
-            }
-
-            // Start sidecar process
+            // Initialize transcription backend (local sidecar, remote server, or HTTP server)
             let handle_clone = app_handle.clone();
             tauri::async_runtime::spawn(async move {
-                println!("[SIDECAR] Starting sidecar process...");
-                if let Err(e) = sidecar::start(&handle_clone).await {
-                    eprintln!("[SIDECAR] Failed to start sidecar: {}", e);
+                println!("[TRANSCRIBER] Initializing transcription backend...");
+                if let Err(e) = transcriber::initialize(&handle_clone).await {
+                    eprintln!("[TRANSCRIBER] Failed to initialize: {}", e);
+                    let _ = handle_clone.emit("sidecar-error", e);
                 }
             });
 
@@ -297,6 +364,11 @@ pub fn run() {
             quit_app,
             get_current_hotkey,
             set_hotkey,
+            get_network_config,
+            set_network_config,
+            test_remote_connection,
+            restart_app,
+            get_local_ip,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

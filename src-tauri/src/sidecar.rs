@@ -26,7 +26,7 @@ lazy_static::lazy_static! {
     static ref SIDECAR: Mutex<Option<SidecarProcess>> = Mutex::new(None);
 }
 
-fn get_sidecar_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+pub fn get_sidecar_path(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     // Sidecar naming convention: name-target_triple (production) or just name (development)
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     let sidecar_name_full = "transcribe-server-aarch64-apple-darwin";

@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use tauri::{Emitter, Manager};
 
-use crate::{audio, config, sidecar, text_insertion, AppState};
+use crate::{audio, config, text_insertion, transcriber, AppState};
 
 // Track whether the hotkey combo is currently activated
 static HOTKEY_ACTIVE: AtomicBool = AtomicBool::new(false);
@@ -280,7 +280,7 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
         let _ = handle.emit("transcription-started", ());
 
         println!("[DEBUG] Starting transcription...");
-        match sidecar::transcribe(&handle, &audio_path).await {
+        match transcriber::transcribe(&handle, &audio_path).await {
             Ok(text) => {
                 println!("[DEBUG] Transcription result: '{}'", text);
                 if !text.is_empty() {

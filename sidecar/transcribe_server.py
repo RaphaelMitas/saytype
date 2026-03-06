@@ -185,6 +185,81 @@ def server_mode(model_name: str):
             }), flush=True)
 
 
+def http_server_mode(model_name: str, host: str, port: int):
+    """
+    Run as an HTTP server for remote transcription.
+
+    Endpoints:
+        GET  /health     -> {"status": "ready"} or {"status": "loading"}
+        POST /transcribe -> {"success": true, "text": "..."} (body: raw WAV bytes)
+    """
+    import tempfile
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+
+    model_ready = False
+
+    class TranscribeHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/health":
+                status = "ready" if model_ready else "loading"
+                self._send_json(200, {"status": status})
+            else:
+                self._send_json(404, {"error": "Not found"})
+
+        def do_POST(self):
+            if self.path == "/transcribe":
+                if not model_ready:
+                    self._send_json(503, {"success": False, "error": "Model still loading"})
+                    return
+
+                content_length = int(self.headers.get("Content-Length", 0))
+                if content_length == 0:
+                    self._send_json(400, {"success": False, "error": "Empty request body"})
+                    return
+
+                audio_bytes = self.rfile.read(content_length)
+
+                # Write to temp file, transcribe, clean up
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                    f.write(audio_bytes)
+                    tmp_path = f.name
+
+                try:
+                    result = transcribe_audio(tmp_path, model_name)
+                    code = 200 if result.get("success") else 500
+                    self._send_json(code, result)
+                finally:
+                    Path(tmp_path).unlink(missing_ok=True)
+            else:
+                self._send_json(404, {"error": "Not found"})
+
+        def _send_json(self, code, data):
+            body = json.dumps(data).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format, *args):
+            # Use print for consistent logging
+            print(f"[HTTP] {args[0]}", flush=True)
+
+    print(f"[HTTP] Loading model...", flush=True)
+    load_model(model_name)
+    warmup_model(model_name)
+    model_ready = True
+    print(f"[HTTP] Model ready", flush=True)
+
+    server = HTTPServer((host, port), TranscribeHandler)
+    print(f"[HTTP] Listening on {host}:{port}", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print(f"\n[HTTP] Shutting down", flush=True)
+        server.shutdown()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Saytype Transcription Server")
     parser.add_argument(
@@ -198,6 +273,23 @@ def main():
         default="mlx-community/parakeet-tdt-0.6b-v3",
         help="Parakeet model to use (default: parakeet-tdt-0.6b-v3)"
     )
+    parser.add_argument(
+        "--http",
+        action="store_true",
+        help="Run as HTTP server instead of stdin/stdout IPC"
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="0.0.0.0",
+        help="HTTP server bind address (default: 0.0.0.0)"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8765,
+        help="HTTP server port (default: 8765)"
+    )
     args = parser.parse_args()
 
     model_name = args.model
@@ -206,8 +298,11 @@ def main():
         # Direct transcription mode
         result = transcribe_audio(args.transcribe, model_name)
         print(json.dumps(result), flush=True)
+    elif args.http:
+        # HTTP server mode
+        http_server_mode(model_name, args.host, args.port)
     else:
-        # Server mode
+        # Stdin/stdout IPC mode
         server_mode(model_name)
 
 
