@@ -198,15 +198,8 @@ export function Settings({ onClose }: SettingsProps) {
     }
   };
 
-  const handleServerUrlChange = async (url: string) => {
+  const handleServerUrlChange = (url: string) => {
     setServerUrl(url);
-    if (networkMode === "client_only") {
-      try {
-        await invoke("set_network_config", { mode: networkMode, serverUrl: url || null, serverPort: null });
-      } catch (error) {
-        console.error("Failed to save server URL:", error);
-      }
-    }
   };
 
   const handleServerPortChange = async (port: number) => {
@@ -217,6 +210,19 @@ export function Settings({ onClose }: SettingsProps) {
       } catch (error) {
         console.error("Failed to save server port:", error);
       }
+    }
+  };
+
+  const handleApplyServerUrl = async () => {
+    if (!serverUrl) return;
+    try {
+      await invoke("set_network_config", { mode: networkMode, serverUrl: serverUrl || null, serverPort: null });
+      const restarted = await invoke<boolean>("restart_app");
+      if (!restarted) {
+        setNeedsRestart(true);
+      }
+    } catch (error) {
+      console.error("Failed to apply server URL:", error);
     }
   };
 
@@ -237,9 +243,10 @@ export function Settings({ onClose }: SettingsProps) {
   const getStatusText = () => {
     switch (state) {
       case "initializing":
-        return networkMode === "client_only"
-          ? "Connecting to server..."
-          : networkMode === "server_only"
+        if (networkMode === "client_only") {
+          return serverUrl ? "Connecting to server..." : "No server URL configured";
+        }
+        return networkMode === "server_only"
           ? "Starting server..."
           : "Loading model...";
       case "recording":
@@ -247,6 +254,9 @@ export function Settings({ onClose }: SettingsProps) {
       case "processing":
         return "Transcribing...";
       default:
+        if (networkMode === "client_only" && lastError) {
+          return "Not connected";
+        }
         return "Ready";
     }
   };
@@ -363,7 +373,10 @@ export function Settings({ onClose }: SettingsProps) {
                   placeholder="http://192.168.1.100:8765"
                 />
               </div>
-              <button className="secondary" onClick={handleTestConnection}>Test Connection</button>
+              <div className="button-group">
+                <button onClick={handleApplyServerUrl} disabled={!serverUrl}>Apply</button>
+                <button className="secondary" onClick={handleTestConnection}>Test</button>
+              </div>
               {connectionStatus && (
                 <p className="test-status">{connectionStatus}</p>
               )}

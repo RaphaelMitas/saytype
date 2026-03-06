@@ -196,6 +196,9 @@ def http_server_mode(model_name: str, host: str, port: int):
     import tempfile
     from http.server import HTTPServer, BaseHTTPRequestHandler
 
+    class ReusableHTTPServer(HTTPServer):
+        allow_reuse_address = True
+
     model_ready = False
 
     class TranscribeHandler(BaseHTTPRequestHandler):
@@ -242,21 +245,26 @@ def http_server_mode(model_name: str, host: str, port: int):
             self.wfile.write(body)
 
         def log_message(self, format, *args):
-            # Use print for consistent logging
-            print(f"[HTTP] {args[0]}", flush=True)
+            # Write to stderr — stdout is piped to Tauri and breaks when the parent exits
+            sys.stderr.write(f"[HTTP] {args[0]}\n")
+            sys.stderr.flush()
 
-    print(f"[HTTP] Loading model...", flush=True)
+    sys.stderr.write("[HTTP] Loading model...\n")
+    sys.stderr.flush()
     load_model(model_name)
     warmup_model(model_name)
     model_ready = True
-    print(f"[HTTP] Model ready", flush=True)
+    sys.stderr.write("[HTTP] Model ready\n")
+    sys.stderr.flush()
 
-    server = HTTPServer((host, port), TranscribeHandler)
+    server = ReusableHTTPServer((host, port), TranscribeHandler)
+    # Print to stdout for Tauri to detect readiness, then switch to stderr
     print(f"[HTTP] Listening on {host}:{port}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print(f"\n[HTTP] Shutting down", flush=True)
+        sys.stderr.write("\n[HTTP] Shutting down\n")
+        sys.stderr.flush()
         server.shutdown()
 
 

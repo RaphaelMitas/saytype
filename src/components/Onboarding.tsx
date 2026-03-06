@@ -114,9 +114,16 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 <button onClick={() => setStep("accessibility")}>Continue</button>
               </>
             ) : (
-              <button onClick={handleRequestMicrophone} disabled={checking}>
-                {checking ? "Checking..." : "Allow Microphone Access"}
-              </button>
+              <>
+                <button onClick={handleRequestMicrophone} disabled={checking}>
+                  {checking ? "Checking..." : "Allow Microphone Access"}
+                </button>
+                <p className="skip-link">
+                  <a href="#" onClick={(e) => { e.preventDefault(); setStep("accessibility"); }}>
+                    Skip this step
+                  </a>
+                </p>
+              </>
             )}
           </div>
         );
@@ -159,6 +166,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     </button>
                   </div>
                 )}
+                <p className="skip-link">
+                  <a href="#" onClick={(e) => { e.preventDefault(); setStep("input_monitoring"); }}>
+                    Skip this step
+                  </a>
+                </p>
               </>
             )}
           </div>
@@ -202,6 +214,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     </button>
                   </div>
                 )}
+                <p className="skip-link">
+                  <a href="#" onClick={(e) => { e.preventDefault(); setStep("complete"); }}>
+                    Skip this step
+                  </a>
+                </p>
               </>
             )}
           </div>
