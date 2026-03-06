@@ -55,10 +55,35 @@ impl HotkeyConfig {
     }
 }
 
+/// App mode for transcription routing
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AppMode {
+    Local,
+    ClientOnly,
+    ServerOnly,
+}
+
+impl Default for AppMode {
+    fn default() -> Self {
+        AppMode::Local
+    }
+}
+
 /// App configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
     pub hotkey: HotkeyConfig,
+    #[serde(default)]
+    pub mode: AppMode,
+    #[serde(default)]
+    pub server_url: Option<String>,
+    #[serde(default = "default_server_port")]
+    pub server_port: Option<u16>,
+}
+
+fn default_server_port() -> Option<u16> {
+    Some(8765)
 }
 
 /// Get the config file path

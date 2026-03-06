@@ -9,7 +9,15 @@ lazy_static::lazy_static! {
     static ref TRAY_ICON: Mutex<Option<TrayIcon>> = Mutex::new(None);
 }
 
+pub fn setup_tray_with_tooltip(app: &AppHandle, tooltip: &str) -> Result<(), Box<dyn std::error::Error>> {
+    setup_tray_inner(app, tooltip)
+}
+
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    setup_tray_inner(app, "Saytype - Push to talk")
+}
+
+fn setup_tray_inner(app: &AppHandle, tooltip: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Create menu items
     let settings = MenuItem::with_id(app, "settings", "Settings...", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Saytype", true, None::<&str>)?;
@@ -21,7 +29,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let tray = TrayIconBuilder::new()
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
-        .tooltip("Saytype - Push to talk")
+        .tooltip(tooltip)
         .on_menu_event(|app, event| {
             match event.id.as_ref() {
                 "settings" => {
