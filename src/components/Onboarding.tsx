@@ -20,6 +20,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [inputMonitoringPermission, setInputMonitoringPermission] = useState(false);
   const [checking, setChecking] = useState(false);
   const [checkFailed, setCheckFailed] = useState(false);
+  const [platform, setPlatform] = useState<string>("macos");
 
   useEffect(() => {
     // Check initial permissions
@@ -28,7 +29,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       setAccessibilityPermission(perms.accessibility);
       setInputMonitoringPermission(perms.input_monitoring);
     });
+    // Detect platform
+    invoke<string>("get_platform")
+      .then(setPlatform)
+      .catch(console.error);
   }, []);
+
+  const nextStepAfterMic = platform === "windows" ? "complete" as Step : "accessibility" as Step;
 
   const handleRequestMicrophone = async () => {
     setChecking(true);
@@ -36,7 +43,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setMicPermission(granted);
     setChecking(false);
     if (granted) {
-      setStep("accessibility");
+      setStep(nextStepAfterMic);
     }
   };
 
@@ -93,7 +100,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <strong>How it works:</strong>
             </p>
             <ol>
-              <li>Hold the Right Command key</li>
+              <li>Hold the {platform === "windows" ? "Right Alt" : "Right Command"} key</li>
               <li>Speak your message</li>
               <li>Release to transcribe and insert</li>
             </ol>
@@ -111,7 +118,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             {micPermission ? (
               <>
                 <p className="success">✓ Microphone access granted</p>
-                <button onClick={() => setStep("accessibility")}>Continue</button>
+                <button onClick={() => setStep(nextStepAfterMic)}>Continue</button>
               </>
             ) : (
               <>
@@ -119,7 +126,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   {checking ? "Checking..." : "Allow Microphone Access"}
                 </button>
                 <p className="skip-link">
-                  <a href="#" onClick={(e) => { e.preventDefault(); setStep("accessibility"); }}>
+                  <a href="#" onClick={(e) => { e.preventDefault(); setStep(nextStepAfterMic); }}>
                     Skip this step
                   </a>
                 </p>
@@ -233,7 +240,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               will continue running in your menu bar.
             </p>
             <p>
-              <strong>Quick reminder:</strong> Hold Right Command, speak, then
+              <strong>Quick reminder:</strong> Hold {platform === "windows" ? "Right Alt" : "Right Command"}, speak, then
               release to transcribe.
             </p>
             <button onClick={onComplete}>Done</button>
@@ -247,9 +254,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       <div className="onboarding-progress">
         <div className={`step ${step === "welcome" ? "active" : ""}`}>1</div>
         <div className={`step ${step === "microphone" ? "active" : ""}`}>2</div>
-        <div className={`step ${step === "accessibility" ? "active" : ""}`}>3</div>
-        <div className={`step ${step === "input_monitoring" ? "active" : ""}`}>4</div>
-        <div className={`step ${step === "complete" ? "active" : ""}`}>5</div>
+        {platform !== "windows" && (
+          <>
+            <div className={`step ${step === "accessibility" ? "active" : ""}`}>3</div>
+            <div className={`step ${step === "input_monitoring" ? "active" : ""}`}>4</div>
+          </>
+        )}
+        <div className={`step ${step === "complete" ? "active" : ""}`}>{platform === "windows" ? 3 : 5}</div>
       </div>
       {renderStep()}
     </div>

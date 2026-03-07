@@ -34,11 +34,10 @@ impl PushToTalkRecorder {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis();
-        self.output_path = format!(
-            "/tmp/saytype_ptt_{}_{}.wav",
-            std::process::id(),
-            timestamp
-        );
+        self.output_path = std::env::temp_dir()
+            .join(format!("saytype_ptt_{}_{}.wav", std::process::id(), timestamp))
+            .to_string_lossy()
+            .to_string();
 
         // Get default input device
         let host = cpal::default_host();
@@ -401,26 +400,57 @@ fn get_av_authorization_status() -> i64 {
 
 /// Play a sound when recording starts
 pub fn play_start_sound() {
-    std::process::Command::new("afplay")
-        .arg("/System/Library/Sounds/Tink.aiff")
-        .spawn()
-        .ok();
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("afplay")
+            .arg("/System/Library/Sounds/Tink.aiff")
+            .spawn()
+            .ok();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        play_windows_sound("SystemAsterisk");
+    }
 }
 
 /// Play a sound when recording stops
 pub fn play_stop_sound() {
-    std::process::Command::new("afplay")
-        .arg("/System/Library/Sounds/Pop.aiff")
-        .spawn()
-        .ok();
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("afplay")
+            .arg("/System/Library/Sounds/Pop.aiff")
+            .spawn()
+            .ok();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        play_windows_sound("SystemExclamation");
+    }
 }
 
 /// Play a sound when hotkey pressed but app is busy/loading
 pub fn play_busy_sound() {
-    std::process::Command::new("afplay")
-        .arg("/System/Library/Sounds/Funk.aiff")
-        .spawn()
-        .ok();
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("afplay")
+            .arg("/System/Library/Sounds/Funk.aiff")
+            .spawn()
+            .ok();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        play_windows_sound("SystemHand");
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn play_windows_sound(alias: &str) {
+    use windows::Win32::Media::Audio::{PlaySoundW, SND_ALIAS, SND_ASYNC};
+    use windows::core::PCWSTR;
+    let wide: Vec<u16> = alias.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe {
+        let _ = PlaySoundW(PCWSTR(wide.as_ptr()), None, SND_ALIAS | SND_ASYNC);
+    }
 }
 
 /// Request microphone permission and wait for user response

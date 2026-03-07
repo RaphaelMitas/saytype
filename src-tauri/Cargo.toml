@@ -1,6 +1,6 @@
 [package]
 name = "saytype"
-version = "0.1.0"
+version = "0.2.1"
 description = "A macOS push-to-talk speech-to-text app"
 authors = ["you"]
 edition = "2021"
@@ -19,10 +19,6 @@ tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# macOS-specific dependencies for hotkey detection and text insertion
-core-graphics = "0.25"
-core-foundation = "0.10"
-core-foundation-sys = "0.8"
 enigo = "0.6"
 arboard = "3"
 
@@ -49,3 +45,15 @@ libc = "0.2"
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.26"
 objc2 = "0.6"
+core-graphics = "0.25"
+core-foundation = "0.10"
+core-foundation-sys = "0.8"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_Media_Audio",
+] }
