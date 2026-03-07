@@ -1,6 +1,6 @@
 [package]
 name = "saytype"
-version = "0.1.0"
+version = "0.2.1"
 description = "A macOS push-to-talk speech-to-text app"
 authors = ["you"]
 edition = "2021"
