@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { useRecording, checkPermissions, openAccessibilitySettings, openInputMonitoringSettings } from "../hooks/useRecording";
 
 interface HotkeyConfig {
@@ -31,6 +32,7 @@ export function Settings({ onClose }: SettingsProps) {
   const [localIp, setLocalIp] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [platform, setPlatform] = useState<string>("macos");
+  const [appVersion, setAppVersion] = useState<string | null>(null);
 
   useEffect(() => {
     checkPermissions().then(setPermissions);
@@ -53,6 +55,9 @@ export function Settings({ onClose }: SettingsProps) {
     // Detect platform
     invoke<string>("get_platform")
       .then(setPlatform)
+      .catch(console.error);
+    getVersion()
+      .then(setAppVersion)
       .catch(console.error);
   }, []);
 
@@ -498,7 +503,7 @@ export function Settings({ onClose }: SettingsProps) {
 
       <section className="about-section">
         <h2>About</h2>
-        <p>Saytype v0.1.0</p>
+        <p>Saytype {appVersion ? `v${appVersion}` : ""}</p>
         <p className="hint">
           {platform === "windows"
             ? "Speech-to-text via remote server"
