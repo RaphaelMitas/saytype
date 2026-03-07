@@ -1,19 +1,35 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "baseBranches": ["develop"],
-  "labels": ["dependencies"],
+  "extends": [
+    "config:recommended"
+  ],
+  "baseBranchPatterns": [
+    "develop"
+  ],
+  "labels": [
+    "dependencies"
+  ],
   "packageRules": [
     {
       "groupName": "tauri",
-      "matchPackagePatterns": ["^tauri", "^@tauri-apps/"]
+      "matchPackageNames": [
+        "/^tauri/",
+        "/^@tauri-apps//"
+      ]
     },
     {
       "groupName": "react",
-      "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"]
+      "matchPackageNames": [
+        "react",
+        "react-dom",
+        "@types/react",
+        "@types/react-dom"
+      ]
     }
   ],
   "pip_requirements": {
-    "fileMatch": ["sidecar/requirements\\.txt$"]
+    "managerFilePatterns": [
+      "/sidecar/requirements\\.txt$/"
+    ]
   }
 }
