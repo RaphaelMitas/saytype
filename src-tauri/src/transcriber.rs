@@ -66,11 +66,14 @@ pub async fn initialize(app_handle: &tauri::AppHandle) -> Result<(), String> {
             let port = config.server_port.unwrap_or(8765);
             let program = sidecar::get_sidecar_path(app_handle)?;
 
-            // Kill any stale sidecar still bound to this port
-            let _ = std::process::Command::new("sh")
-                .arg("-c")
-                .arg(format!("lsof -ti :{} | xargs kill -9 2>/dev/null", port))
-                .status();
+            // Kill any stale sidecar still bound to this port (Unix only)
+            #[cfg(not(target_os = "windows"))]
+            {
+                let _ = std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(format!("lsof -ti :{} | xargs kill -9 2>/dev/null", port))
+                    .status();
+            }
 
             println!("[TRANSCRIBER] Starting sidecar in HTTP server mode on port {}...", port);
             let _ = app_handle.emit("sidecar-loading", ());
