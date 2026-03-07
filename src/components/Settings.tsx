@@ -30,6 +30,7 @@ export function Settings({ onClose }: SettingsProps) {
   const [needsRestart, setNeedsRestart] = useState(false);
   const [localIp, setLocalIp] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [platform, setPlatform] = useState<string>("macos");
 
   useEffect(() => {
     checkPermissions().then(setPermissions);
@@ -48,6 +49,10 @@ export function Settings({ onClose }: SettingsProps) {
     // Load local IP
     invoke<string>("get_local_ip")
       .then(setLocalIp)
+      .catch(console.error);
+    // Detect platform
+    invoke<string>("get_platform")
+      .then(setPlatform)
       .catch(console.error);
   }, []);
 
@@ -117,23 +122,41 @@ export function Settings({ onClose }: SettingsProps) {
 
   // Format JS event.code to display label
   const formatKeyCode = (code: string): string => {
-    const map: Record<string, string> = {
-      MetaLeft: "Left \u2318",
-      MetaRight: "Right \u2318",
-      ShiftLeft: "Left \u21e7",
-      ShiftRight: "Right \u21e7",
-      AltLeft: "Left \u2325",
-      AltRight: "Right \u2325",
-      ControlLeft: "Left \u2303",
-      ControlRight: "Right \u2303",
-      CapsLock: "\u21ea Caps",
-      Space: "Space",
-      Tab: "Tab",
-      Enter: "Return",
-      Escape: "Escape",
-      Backspace: "Delete",
-      Fn: "fn",
-    };
+    const isWindows = platform === "windows";
+    const map: Record<string, string> = isWindows
+      ? {
+          MetaLeft: "Left Win",
+          MetaRight: "Right Win",
+          ShiftLeft: "Left Shift",
+          ShiftRight: "Right Shift",
+          AltLeft: "Left Alt",
+          AltRight: "Right Alt",
+          ControlLeft: "Left Ctrl",
+          ControlRight: "Right Ctrl",
+          CapsLock: "Caps Lock",
+          Space: "Space",
+          Tab: "Tab",
+          Enter: "Enter",
+          Escape: "Escape",
+          Backspace: "Backspace",
+        }
+      : {
+          MetaLeft: "Left \u2318",
+          MetaRight: "Right \u2318",
+          ShiftLeft: "Left \u21e7",
+          ShiftRight: "Right \u21e7",
+          AltLeft: "Left \u2325",
+          AltRight: "Right \u2325",
+          ControlLeft: "Left \u2303",
+          ControlRight: "Right \u2303",
+          CapsLock: "\u21ea Caps",
+          Space: "Space",
+          Tab: "Tab",
+          Enter: "Return",
+          Escape: "Escape",
+          Backspace: "Delete",
+          Fn: "fn",
+        };
 
     if (map[code]) return map[code];
     if (code.startsWith("Key")) return code.slice(3);
@@ -338,23 +361,27 @@ export function Settings({ onClose }: SettingsProps) {
 
       <section className="network-section">
         <h2>Mode</h2>
-        <div className="mode-switcher">
-          <div className="mode-track">
-            <div
-              className="mode-thumb"
-              style={{ transform: `translateX(${networkMode === "local" ? 0 : networkMode === "client_only" ? 100 : 200}%)` }}
-            />
-            {(["local", "client_only", "server_only"] as const).map((mode) => (
-              <button
-                key={mode}
-                className={`mode-option ${networkMode === mode ? "active" : ""}`}
-                onClick={() => handleNetworkModeChange(mode)}
-              >
-                {mode === "local" ? "Local" : mode === "client_only" ? "Client" : "Server"}
-              </button>
-            ))}
+        {platform !== "windows" ? (
+          <div className="mode-switcher">
+            <div className="mode-track">
+              <div
+                className="mode-thumb"
+                style={{ transform: `translateX(${networkMode === "local" ? 0 : networkMode === "client_only" ? 100 : 200}%)` }}
+              />
+              {(["local", "client_only", "server_only"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  className={`mode-option ${networkMode === mode ? "active" : ""}`}
+                  onClick={() => handleNetworkModeChange(mode)}
+                >
+                  {mode === "local" ? "Local" : mode === "client_only" ? "Client" : "Server"}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <p className="hint">Client mode — connects to a remote Saytype server.</p>
+        )}
         {needsRestart && (
           <div className="restart-banner">
             Restart to apply
@@ -429,24 +456,28 @@ export function Settings({ onClose }: SettingsProps) {
               {permissions.microphone ? "✓ Granted" : "✗ Denied"}
             </span>
           </div>
-          <div className="permission-item">
-            <span>Accessibility</span>
-            <span className={permissions.accessibility ? "granted" : "denied"}>
-              {permissions.accessibility ? "✓ Granted" : "✗ Denied"}
-            </span>
-          </div>
-          <div className="permission-item">
-            <span>Input Monitoring</span>
-            <span className={permissions.input_monitoring ? "granted" : "denied"}>
-              {permissions.input_monitoring ? "✓ Granted" : "✗ Denied"}
-            </span>
-          </div>
+          {platform !== "windows" && (
+            <>
+              <div className="permission-item">
+                <span>Accessibility</span>
+                <span className={permissions.accessibility ? "granted" : "denied"}>
+                  {permissions.accessibility ? "✓ Granted" : "✗ Denied"}
+                </span>
+              </div>
+              <div className="permission-item">
+                <span>Input Monitoring</span>
+                <span className={permissions.input_monitoring ? "granted" : "denied"}>
+                  {permissions.input_monitoring ? "✓ Granted" : "✗ Denied"}
+                </span>
+              </div>
+            </>
+          )}
           <div className="button-group">
             <button onClick={handleRefreshPermissions}>Refresh</button>
-            {!permissions.accessibility && (
+            {platform !== "windows" && !permissions.accessibility && (
               <button onClick={openAccessibilitySettings}>Accessibility Settings</button>
             )}
-            {!permissions.input_monitoring && (
+            {platform !== "windows" && !permissions.input_monitoring && (
               <button onClick={openInputMonitoringSettings}>Input Monitoring Settings</button>
             )}
           </div>
@@ -469,7 +500,9 @@ export function Settings({ onClose }: SettingsProps) {
         <h2>About</h2>
         <p>Saytype v0.1.0</p>
         <p className="hint">
-          Offline speech-to-text powered by Parakeet MLX
+          {platform === "windows"
+            ? "Speech-to-text via remote server"
+            : "Offline speech-to-text powered by Parakeet MLX"}
         </p>
       </section>
 

@@ -22,7 +22,38 @@ fn clear_modifiers(keycodes: &[i64]) {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+fn clear_modifiers(keycodes: &[i64]) {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS,
+        KEYEVENTF_KEYUP,
+    };
+
+    // Send key-up events for each modifier keycode to unstick them
+    let inputs: Vec<INPUT> = keycodes
+        .iter()
+        .map(|&vk| INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY(vk as u16),
+                    wScan: 0,
+                    dwFlags: KEYEVENTF_KEYUP,
+                    time: 0,
+                    dwExtraInfo: 0,
+                },
+            },
+        })
+        .collect();
+
+    if !inputs.is_empty() {
+        unsafe {
+            SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn clear_modifiers(_keycodes: &[i64]) {}
 
 /// Insert text by copying to clipboard and pasting with Cmd+V.

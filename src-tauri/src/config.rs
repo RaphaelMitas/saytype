@@ -29,12 +29,34 @@ pub struct HotkeyConfig {
 
 impl Default for HotkeyConfig {
     fn default() -> Self {
-        // Default to Right Command key
-        Self {
-            modifiers: vec![Modifier::Command],
-            key: None,
-            modifier_locations: vec![(54, 2)], // Right Command
-            label: "Right ⌘".to_string(),
+        #[cfg(target_os = "macos")]
+        {
+            // Default to Right Command key (keycode 54)
+            Self {
+                modifiers: vec![Modifier::Command],
+                key: None,
+                modifier_locations: vec![(54, 2)], // Right Command
+                label: "Right ⌘".to_string(),
+            }
+        }
+        #[cfg(target_os = "windows")]
+        {
+            // Default to Right Alt key (VK_RMENU = 165)
+            Self {
+                modifiers: vec![Modifier::Option],
+                key: None,
+                modifier_locations: vec![(165, 2)], // Right Alt
+                label: "Right Alt".to_string(),
+            }
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            Self {
+                modifiers: vec![Modifier::Command],
+                key: None,
+                modifier_locations: vec![(54, 2)],
+                label: "Right ⌘".to_string(),
+            }
         }
     }
 }
@@ -66,7 +88,10 @@ pub enum AppMode {
 
 impl Default for AppMode {
     fn default() -> Self {
-        AppMode::Local
+        #[cfg(target_os = "windows")]
+        { AppMode::ClientOnly }
+        #[cfg(not(target_os = "windows"))]
+        { AppMode::Local }
     }
 }
 
@@ -88,12 +113,21 @@ fn default_server_port() -> Option<u16> {
 
 /// Get the config file path
 fn config_path() -> Result<PathBuf, String> {
-    let home = std::env::var("HOME").map_err(|_| "HOME not set")?;
-    let config_dir = PathBuf::from(home)
-        .join("Library")
-        .join("Application Support")
-        .join("com.raphaelmitas.saytype");
-    Ok(config_dir.join("config.json"))
+    #[cfg(target_os = "windows")]
+    {
+        let appdata = std::env::var("APPDATA").map_err(|_| "APPDATA not set")?;
+        let config_dir = PathBuf::from(appdata).join("saytype");
+        Ok(config_dir.join("config.json"))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let home = std::env::var("HOME").map_err(|_| "HOME not set")?;
+        let config_dir = PathBuf::from(home)
+            .join("Library")
+            .join("Application Support")
+            .join("com.raphaelmitas.saytype");
+        Ok(config_dir.join("config.json"))
+    }
 }
 
 /// Load configuration from disk
@@ -147,9 +181,10 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
     Ok(())
 }
 
-/// Map JavaScript event.code to macOS keycode
+/// Map JavaScript event.code to platform keycode
+#[cfg(not(target_os = "windows"))]
 pub fn js_code_to_keycode(code: &str) -> Option<i64> {
-    // Common keycodes for macOS
+    // macOS keycodes
     // Reference: https://eastmanreference.com/complete-list-of-applescript-key-codes
     match code {
         // Letters
@@ -271,7 +306,140 @@ pub fn js_code_to_keycode(code: &str) -> Option<i64> {
     }
 }
 
-/// Map macOS keycode to display label
+/// Map JavaScript event.code to Windows Virtual Key code
+#[cfg(target_os = "windows")]
+pub fn js_code_to_keycode(code: &str) -> Option<i64> {
+    match code {
+        // Letters (VK_A=0x41 .. VK_Z=0x5A)
+        "KeyA" => Some(0x41), "KeyB" => Some(0x42), "KeyC" => Some(0x43),
+        "KeyD" => Some(0x44), "KeyE" => Some(0x45), "KeyF" => Some(0x46),
+        "KeyG" => Some(0x47), "KeyH" => Some(0x48), "KeyI" => Some(0x49),
+        "KeyJ" => Some(0x4A), "KeyK" => Some(0x4B), "KeyL" => Some(0x4C),
+        "KeyM" => Some(0x4D), "KeyN" => Some(0x4E), "KeyO" => Some(0x4F),
+        "KeyP" => Some(0x50), "KeyQ" => Some(0x51), "KeyR" => Some(0x52),
+        "KeyS" => Some(0x53), "KeyT" => Some(0x54), "KeyU" => Some(0x55),
+        "KeyV" => Some(0x56), "KeyW" => Some(0x57), "KeyX" => Some(0x58),
+        "KeyY" => Some(0x59), "KeyZ" => Some(0x5A),
+
+        // Numbers (VK_0=0x30 .. VK_9=0x39)
+        "Key0" | "Digit0" => Some(0x30), "Key1" | "Digit1" => Some(0x31),
+        "Key2" | "Digit2" => Some(0x32), "Key3" | "Digit3" => Some(0x33),
+        "Key4" | "Digit4" => Some(0x34), "Key5" | "Digit5" => Some(0x35),
+        "Key6" | "Digit6" => Some(0x36), "Key7" | "Digit7" => Some(0x37),
+        "Key8" | "Digit8" => Some(0x38), "Key9" | "Digit9" => Some(0x39),
+
+        // Common keys
+        "Enter" => Some(0x0D),     // VK_RETURN
+        "Tab" => Some(0x09),       // VK_TAB
+        "Space" => Some(0x20),     // VK_SPACE
+        "Backspace" => Some(0x08), // VK_BACK
+        "Escape" => Some(0x1B),    // VK_ESCAPE
+        "Delete" => Some(0x2E),    // VK_DELETE
+
+        // Modifiers with side differentiation (using extended VK codes)
+        "ShiftLeft" => Some(0xA0),    // VK_LSHIFT
+        "ShiftRight" => Some(0xA1),   // VK_RSHIFT
+        "ControlLeft" => Some(0xA2),  // VK_LCONTROL
+        "ControlRight" => Some(0xA3), // VK_RCONTROL
+        "AltLeft" => Some(0xA4),      // VK_LMENU
+        "AltRight" => Some(0xA5),     // VK_RMENU
+        "MetaLeft" => Some(0x5B),     // VK_LWIN
+        "MetaRight" => Some(0x5C),    // VK_RWIN
+        "CapsLock" => Some(0x14),     // VK_CAPITAL
+
+        // Function keys
+        "F1" => Some(0x70), "F2" => Some(0x71), "F3" => Some(0x72),
+        "F4" => Some(0x73), "F5" => Some(0x74), "F6" => Some(0x75),
+        "F7" => Some(0x76), "F8" => Some(0x77), "F9" => Some(0x78),
+        "F10" => Some(0x79), "F11" => Some(0x7A), "F12" => Some(0x7B),
+        "F13" => Some(0x7C), "F14" => Some(0x7D), "F15" => Some(0x7E),
+        "F16" => Some(0x7F), "F17" => Some(0x80), "F18" => Some(0x81),
+        "F19" => Some(0x82), "F20" => Some(0x83),
+
+        // Arrow keys
+        "ArrowLeft" => Some(0x25), "ArrowUp" => Some(0x26),
+        "ArrowRight" => Some(0x27), "ArrowDown" => Some(0x28),
+
+        // Navigation
+        "Home" => Some(0x24), "End" => Some(0x23),
+        "PageUp" => Some(0x21), "PageDown" => Some(0x22),
+
+        // Punctuation / symbols
+        "Equal" => Some(0xBB),        // VK_OEM_PLUS
+        "Minus" => Some(0xBD),        // VK_OEM_MINUS
+        "BracketLeft" => Some(0xDB),  // VK_OEM_4
+        "BracketRight" => Some(0xDD), // VK_OEM_6
+        "Backslash" => Some(0xDC),    // VK_OEM_5
+        "Semicolon" => Some(0xBA),    // VK_OEM_1
+        "Quote" => Some(0xDE),        // VK_OEM_7
+        "Comma" => Some(0xBC),        // VK_OEM_COMMA
+        "Period" => Some(0xBE),       // VK_OEM_PERIOD
+        "Slash" => Some(0xBF),        // VK_OEM_2
+        "Backquote" => Some(0xC0),    // VK_OEM_3
+
+        // Numpad
+        "Numpad0" => Some(0x60), "Numpad1" => Some(0x61), "Numpad2" => Some(0x62),
+        "Numpad3" => Some(0x63), "Numpad4" => Some(0x64), "Numpad5" => Some(0x65),
+        "Numpad6" => Some(0x66), "Numpad7" => Some(0x67), "Numpad8" => Some(0x68),
+        "Numpad9" => Some(0x69),
+        "NumpadMultiply" => Some(0x6A), "NumpadAdd" => Some(0x6B),
+        "NumpadSubtract" => Some(0x6D), "NumpadDecimal" => Some(0x6E),
+        "NumpadDivide" => Some(0x6F), "NumpadEnter" => Some(0x0D),
+        "NumLock" => Some(0x90),
+
+        _ => None,
+    }
+}
+
+/// Map platform keycode to display label
+#[cfg(target_os = "windows")]
+pub fn keycode_to_label(keycode: i64) -> String {
+    match keycode {
+        // Modifiers
+        0xA0 => "Left Shift".to_string(),
+        0xA1 => "Right Shift".to_string(),
+        0xA2 => "Left Ctrl".to_string(),
+        0xA3 => "Right Ctrl".to_string(),
+        0xA4 => "Left Alt".to_string(),
+        0xA5 => "Right Alt".to_string(),
+        0x5B => "Left Win".to_string(),
+        0x5C => "Right Win".to_string(),
+        0x14 => "Caps Lock".to_string(),
+
+        // Common keys
+        0x20 => "Space".to_string(),
+        0x0D => "Enter".to_string(),
+        0x09 => "Tab".to_string(),
+        0x1B => "Escape".to_string(),
+        0x08 => "Backspace".to_string(),
+        0x2E => "Delete".to_string(),
+
+        // Function keys
+        k @ 0x70..=0x83 => format!("F{}", k - 0x70 + 1),
+
+        // Letters
+        k @ 0x41..=0x5A => format!("{}", (k as u8) as char),
+
+        // Numbers
+        k @ 0x30..=0x39 => format!("{}", k - 0x30),
+
+        // Arrow keys
+        0x25 => "Left".to_string(),
+        0x26 => "Up".to_string(),
+        0x27 => "Right".to_string(),
+        0x28 => "Down".to_string(),
+
+        // Navigation
+        0x24 => "Home".to_string(),
+        0x23 => "End".to_string(),
+        0x21 => "Page Up".to_string(),
+        0x22 => "Page Down".to_string(),
+
+        _ => format!("VK{}", keycode),
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
 pub fn keycode_to_label(keycode: i64) -> String {
     match keycode {
         // Modifiers
@@ -367,7 +535,15 @@ pub fn keycode_to_label(keycode: i64) -> String {
 
 /// Check if a keycode is a modifier key
 pub fn is_modifier_keycode(keycode: i64) -> bool {
-    matches!(keycode, 54 | 55 | 56 | 60 | 58 | 61 | 59 | 62 | 57 | 63)
+    #[cfg(target_os = "windows")]
+    {
+        // VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU, VK_LWIN, VK_RWIN, VK_CAPITAL
+        matches!(keycode, 0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA4 | 0xA5 | 0x5B | 0x5C | 0x14)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        matches!(keycode, 54 | 55 | 56 | 60 | 58 | 61 | 59 | 62 | 57 | 63)
+    }
 }
 
 /// Build a display label from keycodes
@@ -376,12 +552,25 @@ pub fn build_label(keycodes: &[i64]) -> String {
 
     // Sort so modifiers come first
     labels.sort_by(|a, b| {
-        let a_is_mod = a.contains('⌘') || a.contains('⇧') || a.contains('⌥') || a.contains('⌃') || a.contains("fn") || a.contains("Caps");
-        let b_is_mod = b.contains('⌘') || b.contains('⇧') || b.contains('⌥') || b.contains('⌃') || b.contains("fn") || b.contains("Caps");
+        let a_is_mod = is_modifier_label(a);
+        let b_is_mod = is_modifier_label(b);
         b_is_mod.cmp(&a_is_mod)
     });
 
     labels.join("+")
+}
+
+fn is_modifier_label(label: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        label.contains("Ctrl") || label.contains("Alt") || label.contains("Shift")
+            || label.contains("Win") || label.contains("Caps")
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        label.contains('⌘') || label.contains('⇧') || label.contains('⌥')
+            || label.contains('⌃') || label.contains("fn") || label.contains("Caps")
+    }
 }
 
 #[cfg(test)]
@@ -389,6 +578,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_default_config() {
         let config = HotkeyConfig::default();
         assert_eq!(config.label, "Right ⌘");
@@ -396,6 +586,15 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
+    fn test_default_config_windows() {
+        let config = HotkeyConfig::default();
+        assert_eq!(config.label, "Right Alt");
+        assert!(config.required_keycodes().contains(&165));
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_keycode_mapping() {
         assert_eq!(js_code_to_keycode("MetaRight"), Some(54));
         assert_eq!(js_code_to_keycode("Space"), Some(49));
@@ -403,8 +602,24 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
+    fn test_keycode_mapping_windows() {
+        assert_eq!(js_code_to_keycode("AltRight"), Some(0xA5));
+        assert_eq!(js_code_to_keycode("Space"), Some(0x20));
+        assert_eq!(js_code_to_keycode("F13"), Some(0x7C));
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_label_building() {
         assert_eq!(build_label(&[54]), "Right ⌘");
         assert_eq!(build_label(&[59, 49]), "Left ⌃+Space");
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_label_building_windows() {
+        assert_eq!(build_label(&[0xA5]), "Right Alt");
+        assert_eq!(build_label(&[0xA2, 0x20]), "Left Ctrl+Space");
     }
 }

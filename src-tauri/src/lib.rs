@@ -1,3 +1,4 @@
+#[cfg(target_os = "macos")]
 mod app_nap;
 mod audio;
 mod config;
@@ -113,12 +114,22 @@ async fn restart_app() -> Result<bool, String> {
         return Ok(false);
     }
     if let Ok(exe) = std::env::current_exe() {
-        let exe_str = exe.to_string_lossy().to_string();
-        if let Some(app_end) = exe_str.find(".app/") {
-            let app_path = &exe_str[..app_end + 4];
-            let _ = std::process::Command::new("sh")
-                .arg("-c")
-                .arg(format!("sleep 0.5 && open -n '{}'", app_path))
+        #[cfg(target_os = "macos")]
+        {
+            let exe_str = exe.to_string_lossy().to_string();
+            if let Some(app_end) = exe_str.find(".app/") {
+                let app_path = &exe_str[..app_end + 4];
+                let _ = std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(format!("sleep 0.5 && open -n '{}'", app_path))
+                    .spawn();
+            }
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let exe_str = exe.to_string_lossy().to_string();
+            let _ = std::process::Command::new("cmd")
+                .args(["/C", &format!("timeout /t 1 >nul && \"{}\"", exe_str)])
                 .spawn();
         }
     }
@@ -165,13 +176,22 @@ async fn set_hotkey(
 
         if is_modifier_keycode(keycode) {
             modifier_locations.push((keycode, location));
-            // Determine modifier type
+            // Determine modifier type (platform-specific keycodes)
+            #[cfg(not(target_os = "windows"))]
             match keycode {
                 54 | 55 => modifiers.push(Modifier::Command),
                 56 | 60 => modifiers.push(Modifier::Shift),
                 58 | 61 => modifiers.push(Modifier::Option),
                 59 | 62 => modifiers.push(Modifier::Control),
                 63 => modifiers.push(Modifier::Function),
+                _ => {}
+            }
+            #[cfg(target_os = "windows")]
+            match keycode {
+                0x5B | 0x5C => modifiers.push(Modifier::Command), // Win keys
+                0xA0 | 0xA1 => modifiers.push(Modifier::Shift),
+                0xA4 | 0xA5 => modifiers.push(Modifier::Option),  // Alt keys
+                0xA2 | 0xA3 => modifiers.push(Modifier::Control),
                 _ => {}
             }
         } else {
@@ -213,7 +233,8 @@ async fn test_sidecar(app_handle: tauri::AppHandle) -> Result<String, String> {
 
     // Create a simple test - just check if sidecar responds
     // We'll create a tiny silent WAV file for testing
-    let test_path = "/tmp/saytype_test.wav";
+    let test_path_buf = std::env::temp_dir().join("saytype_test.wav");
+    let test_path = test_path_buf.to_str().ok_or("Invalid temp path")?;
 
     // Create a minimal WAV file (silent, 1 second)
     let spec = hound::WavSpec {
@@ -280,6 +301,17 @@ async fn test_remote_connection(server_url: String) -> Result<bool, String> {
     remote::check_health(&server_url).await
 }
 
+#[tauri::command]
+fn get_platform() -> String {
+    if cfg!(target_os = "macos") {
+        "macos".to_string()
+    } else if cfg!(target_os = "windows") {
+        "windows".to_string()
+    } else {
+        "unknown".to_string()
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Load config at startup
@@ -310,13 +342,15 @@ pub fn run() {
             }
 
             if !is_server_only {
-                // Check accessibility permission before starting hotkey listener
+                // Check accessibility permission before starting hotkey listener (macOS only)
+                #[cfg(target_os = "macos")]
                 if !text_insertion::check_accessibility_permission() {
                     println!("[HOTKEY] Accessibility permission not granted. Hotkey listener will not work.");
                     let _ = app_handle.emit("accessibility-required", ());
                 }
 
-                // Disable App Nap to ensure event delivery when backgrounded
+                // Disable App Nap to ensure event delivery when backgrounded (macOS only)
+                #[cfg(target_os = "macos")]
                 if let Err(e) = app_nap::disable_app_nap() {
                     eprintln!("[APP_NAP] Warning: Failed to disable App Nap: {}", e);
                 }
@@ -369,6 +403,7 @@ pub fn run() {
             test_remote_connection,
             restart_app,
             get_local_ip,
+            get_platform,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
