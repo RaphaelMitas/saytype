@@ -25,8 +25,7 @@ fn clear_modifiers(keycodes: &[i64]) {
 #[cfg(target_os = "windows")]
 fn clear_modifiers(keycodes: &[i64]) {
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS,
-        KEYEVENTF_KEYUP,
+        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
     };
 
     // Send key-up events for each modifier keycode to unstick them
