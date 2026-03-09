@@ -3657,6 +3657,7 @@ name = "saytype"
 version = "0.2.1"
 dependencies = [
  "arboard",
+ "audioadapter-buffers",
  "cocoa",
  "core-foundation 0.10.1",
  "core-foundation-sys",

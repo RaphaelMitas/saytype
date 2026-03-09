@@ -1,7 +1,8 @@
+use audioadapter_buffers::direct::InterleavedSlice;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, Stream};
 use hound::{WavSpec, WavWriter};
-use rubato::{FftFixedInOut, Resampler};
+use rubato::{Fft, FixedSync, Resampler};
 use std::sync::{Arc, Mutex as StdMutex};
 
 const TARGET_SAMPLE_RATE: u32 = 16000; // 16kHz for Whisper/Parakeet
@@ -50,7 +51,7 @@ impl PushToTalkRecorder {
             .default_input_config()
             .map_err(|e| format!("Failed to get input config: {}", e))?;
 
-        self.sample_rate = config.sample_rate().0;
+        self.sample_rate = config.sample_rate();
 
         // Clear the sample buffer
         {
@@ -188,50 +189,29 @@ fn resample_audio(samples: &[f32], source_rate: u32, target_rate: u32) -> Result
         return Ok(samples.to_vec());
     }
 
-    // Calculate chunk size that works well with rubato
-    // Use a reasonable chunk size for real-time audio
-    let chunk_size = 1024;
-
-    // Create resampler
-    let mut resampler = FftFixedInOut::<f32>::new(
+    let mut resampler = Fft::<f32>::new(
         source_rate as usize,
         target_rate as usize,
-        chunk_size,
-        1, // mono
+        1024, // chunk_size
+        1,    // sub_chunks
+        1,    // mono
+        FixedSync::Both,
     )
     .map_err(|e| format!("Failed to create resampler: {}", e))?;
 
-    let input_frames_per_chunk = resampler.input_frames_next();
-    let mut output = Vec::with_capacity(
-        (samples.len() as f64 * target_rate as f64 / source_rate as f64) as usize + 1024,
-    );
+    let input_adapter = InterleavedSlice::new(samples, 1, samples.len())
+        .map_err(|e| format!("Failed to create input adapter: {}", e))?;
 
-    // Process in chunks
-    let mut pos = 0;
-    while pos + input_frames_per_chunk <= samples.len() {
-        let input_chunk = vec![samples[pos..pos + input_frames_per_chunk].to_vec()];
-        let resampled = resampler
-            .process(&input_chunk, None)
-            .map_err(|e| format!("Resampling error: {}", e))?;
-        output.extend_from_slice(&resampled[0]);
-        pos += input_frames_per_chunk;
-    }
+    let output_len = resampler.process_all_needed_output_len(samples.len());
+    let mut output = vec![0.0_f32; output_len];
+    let mut output_adapter = InterleavedSlice::new_mut(&mut output, 1, output_len)
+        .map_err(|e| format!("Failed to create output adapter: {}", e))?;
 
-    // Handle remaining samples by padding with zeros
-    if pos < samples.len() {
-        let remaining = samples.len() - pos;
-        let mut padded = samples[pos..].to_vec();
-        padded.resize(input_frames_per_chunk, 0.0);
-        let input_chunk = vec![padded];
-        let resampled = resampler
-            .process(&input_chunk, None)
-            .map_err(|e| format!("Resampling error: {}", e))?;
-        // Only take the proportion of output that corresponds to actual input
-        let output_frames =
-            (remaining as f64 * target_rate as f64 / source_rate as f64) as usize;
-        output.extend_from_slice(&resampled[0][..output_frames.min(resampled[0].len())]);
-    }
+    let (_, frames_written) = resampler
+        .process_all_into_buffer(&input_adapter, &mut output_adapter, samples.len(), None)
+        .map_err(|e| format!("Resampling error: {}", e))?;
 
+    output.truncate(frames_written);
     Ok(output)
 }
 
