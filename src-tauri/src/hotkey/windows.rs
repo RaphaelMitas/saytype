@@ -87,7 +87,7 @@ unsafe extern "system" fn keyboard_hook_proc(
         }
     }
 
-    CallNextHookEx(HHOOK::default(), n_code, w_param, l_param)
+    CallNextHookEx(Some(HHOOK::default()), n_code, w_param, l_param)
 }
 
 /// Disambiguate generic VK_SHIFT/VK_CONTROL/VK_MENU into left/right variants
