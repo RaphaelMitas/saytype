@@ -25,6 +25,19 @@
         "@types/react",
         "@types/react-dom"
       ]
+    },
+    {
+      "groupName": "rust dependencies (non-major)",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "groupName": "build tools",
+      "matchPackageNames": ["/^vite/", "/^@vitejs/", "typescript"]
+    },
+    {
+      "groupName": "github actions",
+      "matchManagers": ["github-actions"]
     }
   ],
   "pip_requirements": {
