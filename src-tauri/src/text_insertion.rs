@@ -1,5 +1,8 @@
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use arboard::Clipboard;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::thread;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::time::Duration;
 
 /// Clear any stuck modifier keys before typing.
