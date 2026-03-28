@@ -30,12 +30,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       setInputMonitoringPermission(perms.input_monitoring);
     });
     // Detect platform
-    invoke<string>("get_platform")
-      .then(setPlatform)
-      .catch(console.error);
+    invoke<string>("get_platform").then(setPlatform).catch(console.error);
   }, []);
 
-  const nextStepAfterMic = platform === "windows" ? "complete" as Step : "accessibility" as Step;
+  const nextStepAfterMic =
+    platform === "windows" ? ("complete" as Step) : ("accessibility" as Step);
 
   const handleRequestMicrophone = async () => {
     setChecking(true);
@@ -93,8 +92,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <div className="onboarding-step">
             <h2>Welcome to Saytype</h2>
             <p>
-              Saytype lets you transcribe your speech into any text field
-              using a simple push-to-talk gesture.
+              Saytype lets you transcribe your speech into any text field using a simple
+              push-to-talk gesture.
             </p>
             <p>
               <strong>How it works:</strong>
@@ -112,9 +111,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         return (
           <div className="onboarding-step">
             <h2>Microphone Access</h2>
-            <p>
-              Saytype needs access to your microphone to capture your speech.
-            </p>
+            <p>Saytype needs access to your microphone to capture your speech.</p>
             {micPermission ? (
               <>
                 <p className="success">✓ Microphone access granted</p>
@@ -126,7 +123,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   {checking ? "Checking..." : "Allow Microphone Access"}
                 </button>
                 <p className="skip-link">
-                  <a href="#" onClick={(e) => { e.preventDefault(); setStep(nextStepAfterMic); }}>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setStep(nextStepAfterMic);
+                    }}
+                  >
                     Skip this step
                   </a>
                 </p>
@@ -140,8 +143,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <div className="onboarding-step">
             <h2>Accessibility Permission</h2>
             <p>
-              To insert transcribed text at the cursor position,
-              Saytype needs Accessibility permissions.
+              To insert transcribed text at the cursor position, Saytype needs Accessibility
+              permissions.
             </p>
             <ol>
               <li>Click "Open Settings" below</li>
@@ -165,16 +168,20 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 {checkFailed && (
                   <div className="warning">
                     <p>
-                      <strong>Permission not detected.</strong> If you've already enabled it in System Settings,
-                      the app needs to be restarted for the change to take effect.
+                      <strong>Permission not detected.</strong> If you've already enabled it in
+                      System Settings, the app needs to be restarted for the change to take effect.
                     </p>
-                    <button onClick={handleQuitApp}>
-                      Quit & Restart App
-                    </button>
+                    <button onClick={handleQuitApp}>Quit & Restart App</button>
                   </div>
                 )}
                 <p className="skip-link">
-                  <a href="#" onClick={(e) => { e.preventDefault(); setStep("input_monitoring"); }}>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setStep("input_monitoring");
+                    }}
+                  >
                     Skip this step
                   </a>
                 </p>
@@ -188,8 +195,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <div className="onboarding-step">
             <h2>Input Monitoring Permission</h2>
             <p>
-              To detect the Right Command key press,
-              Saytype needs Input Monitoring permissions.
+              To detect the Right Command key press, Saytype needs Input Monitoring permissions.
             </p>
             <ol>
               <li>Click "Open Settings" below</li>
@@ -213,16 +219,20 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 {checkFailed && (
                   <div className="warning">
                     <p>
-                      <strong>Permission not detected.</strong> If you've already enabled it in System Settings,
-                      the app needs to be restarted for the change to take effect.
+                      <strong>Permission not detected.</strong> If you've already enabled it in
+                      System Settings, the app needs to be restarted for the change to take effect.
                     </p>
-                    <button onClick={handleQuitApp}>
-                      Quit & Restart App
-                    </button>
+                    <button onClick={handleQuitApp}>Quit & Restart App</button>
                   </div>
                 )}
                 <p className="skip-link">
-                  <a href="#" onClick={(e) => { e.preventDefault(); setStep("complete"); }}>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setStep("complete");
+                    }}
+                  >
                     Skip this step
                   </a>
                 </p>
@@ -236,12 +246,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <div className="onboarding-step">
             <h2>You're All Set!</h2>
             <p>
-              Saytype is ready to use. You can close this window—the app
-              will continue running in your menu bar.
+              Saytype is ready to use. You can close this window—the app will continue running in
+              your menu bar.
             </p>
             <p>
-              <strong>Quick reminder:</strong> Hold {platform === "windows" ? "Right Alt" : "Right Command"}, speak, then
-              release to transcribe.
+              <strong>Quick reminder:</strong> Hold{" "}
+              {platform === "windows" ? "Right Alt" : "Right Command"}, speak, then release to
+              transcribe.
             </p>
             <button onClick={onComplete}>Done</button>
           </div>
@@ -260,7 +271,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             <div className={`step ${step === "input_monitoring" ? "active" : ""}`}>4</div>
           </>
         )}
-        <div className={`step ${step === "complete" ? "active" : ""}`}>{platform === "windows" ? 3 : 5}</div>
+        <div className={`step ${step === "complete" ? "active" : ""}`}>
+          {platform === "windows" ? 3 : 5}
+        </div>
       </div>
       {renderStep()}
     </div>

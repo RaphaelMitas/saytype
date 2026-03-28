@@ -1,7 +1,7 @@
 use std::process::Stdio;
 use tauri::{Emitter, Manager};
 
-use crate::config::{AppMode, load_config};
+use crate::config::{load_config, AppMode};
 use crate::{remote, sidecar, AppState};
 
 /// Transcribe audio, routing to local sidecar or remote server based on config.
@@ -16,9 +16,7 @@ pub async fn transcribe(app_handle: &tauri::AppHandle, audio_path: &str) -> Resu
                 .ok_or("No server URL configured")?;
             remote::transcribe(server_url, audio_path).await
         }
-        AppMode::ServerOnly => {
-            Err("Server mode — recording disabled".to_string())
-        }
+        AppMode::ServerOnly => Err("Server mode — recording disabled".to_string()),
     }
 }
 
@@ -26,9 +24,7 @@ pub async fn transcribe(app_handle: &tauri::AppHandle, audio_path: &str) -> Resu
 pub async fn initialize(app_handle: &tauri::AppHandle) -> Result<(), String> {
     let config = load_config();
     match config.mode {
-        AppMode::Local => {
-            sidecar::start(app_handle).await
-        }
+        AppMode::Local => sidecar::start(app_handle).await,
         AppMode::ClientOnly => {
             let server_url = config
                 .server_url
@@ -54,7 +50,11 @@ pub async fn initialize(app_handle: &tauri::AppHandle) -> Result<(), String> {
                         println!("[TRANSCRIBER] Remote server loading (attempt {}/60)", i + 1);
                     }
                     Err(e) => {
-                        println!("[TRANSCRIBER] Health check failed (attempt {}/60): {}", i + 1, e);
+                        println!(
+                            "[TRANSCRIBER] Health check failed (attempt {}/60): {}",
+                            i + 1,
+                            e
+                        );
                     }
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -75,7 +75,10 @@ pub async fn initialize(app_handle: &tauri::AppHandle) -> Result<(), String> {
                     .status();
             }
 
-            println!("[TRANSCRIBER] Starting sidecar in HTTP server mode on port {}...", port);
+            println!(
+                "[TRANSCRIBER] Starting sidecar in HTTP server mode on port {}...",
+                port
+            );
             let _ = app_handle.emit("sidecar-loading", ());
 
             let mut child = std::process::Command::new(&program)
@@ -106,22 +109,23 @@ pub async fn initialize(app_handle: &tauri::AppHandle) -> Result<(), String> {
                         }
                         Err(e) => {
                             if let Some(tx) = tx.take() {
-                                let _ = tx.send(Err(format!("Failed to read sidecar output: {}", e)));
+                                let _ =
+                                    tx.send(Err(format!("Failed to read sidecar output: {}", e)));
                             }
                             return;
                         }
                     }
                 }
                 if let Some(tx) = tx.take() {
-                    let _ = tx.send(Err("Sidecar process exited before becoming ready".to_string()));
+                    let _ = tx.send(Err(
+                        "Sidecar process exited before becoming ready".to_string()
+                    ));
                 }
             });
 
             // Wait with timeout
-            tokio::time::timeout(
-                std::time::Duration::from_secs(120),
-                rx,
-            ).await
+            tokio::time::timeout(std::time::Duration::from_secs(120), rx)
+                .await
                 .map_err(|_| "Timed out waiting for sidecar HTTP server to start".to_string())?
                 .map_err(|_| "Channel closed unexpectedly".to_string())??;
 
@@ -131,7 +135,10 @@ pub async fn initialize(app_handle: &tauri::AppHandle) -> Result<(), String> {
             }
             let _ = app_handle.emit("sidecar-ready", ());
 
-            println!("[TRANSCRIBER] Sidecar HTTP server is ready on port {}", port);
+            println!(
+                "[TRANSCRIBER] Sidecar HTTP server is ready on port {}",
+                port
+            );
             Ok(())
         }
     }

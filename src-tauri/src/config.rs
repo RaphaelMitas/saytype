@@ -64,7 +64,8 @@ impl Default for HotkeyConfig {
 impl HotkeyConfig {
     /// Get all keycodes that must be held for this hotkey
     pub fn required_keycodes(&self) -> HashSet<i64> {
-        let mut keycodes: HashSet<i64> = self.modifier_locations.iter().map(|(kc, _)| *kc).collect();
+        let mut keycodes: HashSet<i64> =
+            self.modifier_locations.iter().map(|(kc, _)| *kc).collect();
         if let Some(key) = self.key {
             keycodes.insert(key);
         }
@@ -86,12 +87,17 @@ pub enum AppMode {
     ServerOnly,
 }
 
+#[allow(clippy::derivable_impls)] // Platform-conditional default requires manual impl
 impl Default for AppMode {
     fn default() -> Self {
         #[cfg(target_os = "windows")]
-        { AppMode::ClientOnly }
+        {
+            AppMode::ClientOnly
+        }
         #[cfg(not(target_os = "windows"))]
-        { AppMode::Local }
+        {
+            AppMode::Local
+        }
     }
 }
 
@@ -136,17 +142,15 @@ pub fn load_config() -> AppConfig {
         Ok(path) => {
             if path.exists() {
                 match fs::read_to_string(&path) {
-                    Ok(contents) => {
-                        match serde_json::from_str(&contents) {
-                            Ok(config) => {
-                                println!("[CONFIG] Loaded config from {:?}", path);
-                                return config;
-                            }
-                            Err(e) => {
-                                eprintln!("[CONFIG] Failed to parse config: {}", e);
-                            }
+                    Ok(contents) => match serde_json::from_str(&contents) {
+                        Ok(config) => {
+                            println!("[CONFIG] Loaded config from {:?}", path);
+                            return config;
                         }
-                    }
+                        Err(e) => {
+                            eprintln!("[CONFIG] Failed to parse config: {}", e);
+                        }
+                    },
                     Err(e) => {
                         eprintln!("[CONFIG] Failed to read config: {}", e);
                     }
@@ -174,8 +178,7 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
     let json = serde_json::to_string_pretty(config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-    fs::write(&path, json)
-        .map_err(|e| format!("Failed to write config: {}", e))?;
+    fs::write(&path, json).map_err(|e| format!("Failed to write config: {}", e))?;
 
     println!("[CONFIG] Saved config to {:?}", path);
     Ok(())
@@ -242,16 +245,16 @@ pub fn js_code_to_keycode(code: &str) -> Option<i64> {
         "Escape" => Some(53),
 
         // Modifier keys with side differentiation
-        "MetaRight" => Some(54),   // Right Command
-        "MetaLeft" => Some(55),    // Left Command
-        "ShiftLeft" => Some(56),   // Left Shift
+        "MetaRight" => Some(54), // Right Command
+        "MetaLeft" => Some(55),  // Left Command
+        "ShiftLeft" => Some(56), // Left Shift
         "CapsLock" => Some(57),
-        "AltLeft" => Some(58),     // Left Option
-        "ControlLeft" => Some(59), // Left Control
-        "ShiftRight" => Some(60),  // Right Shift
-        "AltRight" => Some(61),    // Right Option
-        "ControlRight" => Some(62),// Right Control
-        "Fn" => Some(63),          // Function key
+        "AltLeft" => Some(58),      // Left Option
+        "ControlLeft" => Some(59),  // Left Control
+        "ShiftRight" => Some(60),   // Right Shift
+        "AltRight" => Some(61),     // Right Option
+        "ControlRight" => Some(62), // Right Control
+        "Fn" => Some(63),           // Function key
 
         // Function keys
         "F17" => Some(64),
@@ -311,22 +314,44 @@ pub fn js_code_to_keycode(code: &str) -> Option<i64> {
 pub fn js_code_to_keycode(code: &str) -> Option<i64> {
     match code {
         // Letters (VK_A=0x41 .. VK_Z=0x5A)
-        "KeyA" => Some(0x41), "KeyB" => Some(0x42), "KeyC" => Some(0x43),
-        "KeyD" => Some(0x44), "KeyE" => Some(0x45), "KeyF" => Some(0x46),
-        "KeyG" => Some(0x47), "KeyH" => Some(0x48), "KeyI" => Some(0x49),
-        "KeyJ" => Some(0x4A), "KeyK" => Some(0x4B), "KeyL" => Some(0x4C),
-        "KeyM" => Some(0x4D), "KeyN" => Some(0x4E), "KeyO" => Some(0x4F),
-        "KeyP" => Some(0x50), "KeyQ" => Some(0x51), "KeyR" => Some(0x52),
-        "KeyS" => Some(0x53), "KeyT" => Some(0x54), "KeyU" => Some(0x55),
-        "KeyV" => Some(0x56), "KeyW" => Some(0x57), "KeyX" => Some(0x58),
-        "KeyY" => Some(0x59), "KeyZ" => Some(0x5A),
+        "KeyA" => Some(0x41),
+        "KeyB" => Some(0x42),
+        "KeyC" => Some(0x43),
+        "KeyD" => Some(0x44),
+        "KeyE" => Some(0x45),
+        "KeyF" => Some(0x46),
+        "KeyG" => Some(0x47),
+        "KeyH" => Some(0x48),
+        "KeyI" => Some(0x49),
+        "KeyJ" => Some(0x4A),
+        "KeyK" => Some(0x4B),
+        "KeyL" => Some(0x4C),
+        "KeyM" => Some(0x4D),
+        "KeyN" => Some(0x4E),
+        "KeyO" => Some(0x4F),
+        "KeyP" => Some(0x50),
+        "KeyQ" => Some(0x51),
+        "KeyR" => Some(0x52),
+        "KeyS" => Some(0x53),
+        "KeyT" => Some(0x54),
+        "KeyU" => Some(0x55),
+        "KeyV" => Some(0x56),
+        "KeyW" => Some(0x57),
+        "KeyX" => Some(0x58),
+        "KeyY" => Some(0x59),
+        "KeyZ" => Some(0x5A),
 
         // Numbers (VK_0=0x30 .. VK_9=0x39)
-        "Key0" | "Digit0" => Some(0x30), "Key1" | "Digit1" => Some(0x31),
-        "Key2" | "Digit2" => Some(0x32), "Key3" | "Digit3" => Some(0x33),
-        "Key4" | "Digit4" => Some(0x34), "Key5" | "Digit5" => Some(0x35),
-        "Key6" | "Digit6" => Some(0x36), "Key7" | "Digit7" => Some(0x37),
-        "Key8" | "Digit8" => Some(0x38), "Key9" | "Digit9" => Some(0x39),
+        "Key0" | "Digit0" => Some(0x30),
+        "Key1" | "Digit1" => Some(0x31),
+        "Key2" | "Digit2" => Some(0x32),
+        "Key3" | "Digit3" => Some(0x33),
+        "Key4" | "Digit4" => Some(0x34),
+        "Key5" | "Digit5" => Some(0x35),
+        "Key6" | "Digit6" => Some(0x36),
+        "Key7" | "Digit7" => Some(0x37),
+        "Key8" | "Digit8" => Some(0x38),
+        "Key9" | "Digit9" => Some(0x39),
 
         // Common keys
         "Enter" => Some(0x0D),     // VK_RETURN
@@ -348,21 +373,38 @@ pub fn js_code_to_keycode(code: &str) -> Option<i64> {
         "CapsLock" => Some(0x14),     // VK_CAPITAL
 
         // Function keys
-        "F1" => Some(0x70), "F2" => Some(0x71), "F3" => Some(0x72),
-        "F4" => Some(0x73), "F5" => Some(0x74), "F6" => Some(0x75),
-        "F7" => Some(0x76), "F8" => Some(0x77), "F9" => Some(0x78),
-        "F10" => Some(0x79), "F11" => Some(0x7A), "F12" => Some(0x7B),
-        "F13" => Some(0x7C), "F14" => Some(0x7D), "F15" => Some(0x7E),
-        "F16" => Some(0x7F), "F17" => Some(0x80), "F18" => Some(0x81),
-        "F19" => Some(0x82), "F20" => Some(0x83),
+        "F1" => Some(0x70),
+        "F2" => Some(0x71),
+        "F3" => Some(0x72),
+        "F4" => Some(0x73),
+        "F5" => Some(0x74),
+        "F6" => Some(0x75),
+        "F7" => Some(0x76),
+        "F8" => Some(0x77),
+        "F9" => Some(0x78),
+        "F10" => Some(0x79),
+        "F11" => Some(0x7A),
+        "F12" => Some(0x7B),
+        "F13" => Some(0x7C),
+        "F14" => Some(0x7D),
+        "F15" => Some(0x7E),
+        "F16" => Some(0x7F),
+        "F17" => Some(0x80),
+        "F18" => Some(0x81),
+        "F19" => Some(0x82),
+        "F20" => Some(0x83),
 
         // Arrow keys
-        "ArrowLeft" => Some(0x25), "ArrowUp" => Some(0x26),
-        "ArrowRight" => Some(0x27), "ArrowDown" => Some(0x28),
+        "ArrowLeft" => Some(0x25),
+        "ArrowUp" => Some(0x26),
+        "ArrowRight" => Some(0x27),
+        "ArrowDown" => Some(0x28),
 
         // Navigation
-        "Home" => Some(0x24), "End" => Some(0x23),
-        "PageUp" => Some(0x21), "PageDown" => Some(0x22),
+        "Home" => Some(0x24),
+        "End" => Some(0x23),
+        "PageUp" => Some(0x21),
+        "PageDown" => Some(0x22),
 
         // Punctuation / symbols
         "Equal" => Some(0xBB),        // VK_OEM_PLUS
@@ -378,13 +420,22 @@ pub fn js_code_to_keycode(code: &str) -> Option<i64> {
         "Backquote" => Some(0xC0),    // VK_OEM_3
 
         // Numpad
-        "Numpad0" => Some(0x60), "Numpad1" => Some(0x61), "Numpad2" => Some(0x62),
-        "Numpad3" => Some(0x63), "Numpad4" => Some(0x64), "Numpad5" => Some(0x65),
-        "Numpad6" => Some(0x66), "Numpad7" => Some(0x67), "Numpad8" => Some(0x68),
+        "Numpad0" => Some(0x60),
+        "Numpad1" => Some(0x61),
+        "Numpad2" => Some(0x62),
+        "Numpad3" => Some(0x63),
+        "Numpad4" => Some(0x64),
+        "Numpad5" => Some(0x65),
+        "Numpad6" => Some(0x66),
+        "Numpad7" => Some(0x67),
+        "Numpad8" => Some(0x68),
         "Numpad9" => Some(0x69),
-        "NumpadMultiply" => Some(0x6A), "NumpadAdd" => Some(0x6B),
-        "NumpadSubtract" => Some(0x6D), "NumpadDecimal" => Some(0x6E),
-        "NumpadDivide" => Some(0x6F), "NumpadEnter" => Some(0x0D),
+        "NumpadMultiply" => Some(0x6A),
+        "NumpadAdd" => Some(0x6B),
+        "NumpadSubtract" => Some(0x6D),
+        "NumpadDecimal" => Some(0x6E),
+        "NumpadDivide" => Some(0x6F),
+        "NumpadEnter" => Some(0x0D),
         "NumLock" => Some(0x90),
 
         _ => None,
@@ -538,11 +589,14 @@ pub fn is_modifier_keycode(keycode: i64) -> bool {
     #[cfg(target_os = "windows")]
     {
         // VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU, VK_LWIN, VK_RWIN, VK_CAPITAL
-        matches!(keycode, 0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA4 | 0xA5 | 0x5B | 0x5C | 0x14)
+        matches!(
+            keycode,
+            0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA4 | 0xA5 | 0x5B | 0x5C | 0x14
+        )
     }
     #[cfg(not(target_os = "windows"))]
     {
-        matches!(keycode, 54 | 55 | 56 | 60 | 58 | 61 | 59 | 62 | 57 | 63)
+        matches!(keycode, 54..=63)
     }
 }
 
@@ -563,13 +617,20 @@ pub fn build_label(keycodes: &[i64]) -> String {
 fn is_modifier_label(label: &str) -> bool {
     #[cfg(target_os = "windows")]
     {
-        label.contains("Ctrl") || label.contains("Alt") || label.contains("Shift")
-            || label.contains("Win") || label.contains("Caps")
+        label.contains("Ctrl")
+            || label.contains("Alt")
+            || label.contains("Shift")
+            || label.contains("Win")
+            || label.contains("Caps")
     }
     #[cfg(not(target_os = "windows"))]
     {
-        label.contains('⌘') || label.contains('⇧') || label.contains('⌥')
-            || label.contains('⌃') || label.contains("fn") || label.contains("Caps")
+        label.contains('⌘')
+            || label.contains('⇧')
+            || label.contains('⌥')
+            || label.contains('⌃')
+            || label.contains("fn")
+            || label.contains("Caps")
     }
 }
 

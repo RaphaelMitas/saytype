@@ -173,8 +173,12 @@ pub async fn transcribe(
         .read_line(&mut line)
         .map_err(|e| format!("Failed to read from sidecar: {}", e))?;
 
-    let response: TranscribeResponse = serde_json::from_str(&line)
-        .map_err(|e| format!("Failed to parse transcription response: {} - Raw: {}", e, line))?;
+    let response: TranscribeResponse = serde_json::from_str(&line).map_err(|e| {
+        format!(
+            "Failed to parse transcription response: {} - Raw: {}",
+            e, line
+        )
+    })?;
 
     if response.success {
         response

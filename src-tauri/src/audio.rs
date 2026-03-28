@@ -36,7 +36,11 @@ impl PushToTalkRecorder {
             .unwrap()
             .as_millis();
         self.output_path = std::env::temp_dir()
-            .join(format!("saytype_ptt_{}_{}.wav", std::process::id(), timestamp))
+            .join(format!(
+                "saytype_ptt_{}_{}.wav",
+                std::process::id(),
+                timestamp
+            ))
             .to_string_lossy()
             .to_string();
 
@@ -110,8 +114,7 @@ impl PushToTalkRecorder {
                             if let Ok(mut buffer) = samples_clone.lock() {
                                 // Convert u16 to f32 (centered at 0)
                                 for &sample in data {
-                                    let normalized =
-                                        (sample as f32 - 32768.0) / 32768.0;
+                                    let normalized = (sample as f32 - 32768.0) / 32768.0;
                                     buffer.push(normalized);
                                 }
                             }
@@ -263,7 +266,10 @@ pub fn check_microphone_permission() -> bool {
     {
         // Try AVFoundation API first
         let status = get_av_authorization_status();
-        eprintln!("check_microphone_permission: AVAuthorizationStatus = {}", status);
+        eprintln!(
+            "check_microphone_permission: AVAuthorizationStatus = {}",
+            status
+        );
 
         // If AVFoundation works and returns authorized, we're good
         if status == 3 {
@@ -342,7 +348,6 @@ fn check_microphone_by_recording() -> bool {
 fn get_av_authorization_status() -> i64 {
     use objc2::msg_send;
     use objc2::runtime::{AnyClass, AnyObject};
-    use std::ffi::CStr;
 
     // Link AVFoundation framework to ensure AVCaptureDevice class is available
     #[link(name = "AVFoundation", kind = "framework")]
@@ -367,12 +372,13 @@ fn get_av_authorization_status() -> i64 {
             }
         };
 
-        let audio_type_cstr = CStr::from_bytes_with_nul(b"soun\0").unwrap();
+        let audio_type_cstr = c"soun";
         let audio_type: *mut AnyObject =
             msg_send![ns_string_class, stringWithUTF8String: audio_type_cstr.as_ptr()];
 
         // Call [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio]
-        let status: i64 = msg_send![av_capture_device_class, authorizationStatusForMediaType: audio_type];
+        let status: i64 =
+            msg_send![av_capture_device_class, authorizationStatusForMediaType: audio_type];
 
         status
     }
@@ -425,8 +431,8 @@ pub fn play_busy_sound() {
 
 #[cfg(target_os = "windows")]
 fn play_windows_sound(alias: &str) {
-    use windows::Win32::Media::Audio::{PlaySoundW, SND_ALIAS, SND_ASYNC};
     use windows::core::PCWSTR;
+    use windows::Win32::Media::Audio::{PlaySoundW, SND_ALIAS, SND_ASYNC};
     let wide: Vec<u16> = alias.encode_utf16().chain(std::iter::once(0)).collect();
     unsafe {
         let _ = PlaySoundW(PCWSTR(wide.as_ptr()), None, SND_ALIAS | SND_ASYNC);
@@ -479,7 +485,9 @@ pub async fn request_microphone_permission() -> Result<bool, String> {
             Ok(s) => {
                 // Try to play the stream to trigger permission
                 if s.play().is_ok() {
-                    eprintln!("request_microphone_permission: stream started, waiting for user response");
+                    eprintln!(
+                        "request_microphone_permission: stream started, waiting for user response"
+                    );
 
                     // Wait for the dialog to appear and user to respond
                     // Poll for up to 30 seconds, checking both AVFoundation status and actual recording capability
@@ -489,7 +497,10 @@ pub async fn request_microphone_permission() -> Result<bool, String> {
                         // Check AVFoundation status
                         let current_status = get_av_authorization_status();
                         if i % 20 == 0 {
-                            eprintln!("request_microphone_permission: polling iteration {}, status = {}", i, current_status);
+                            eprintln!(
+                                "request_microphone_permission: polling iteration {}, status = {}",
+                                i, current_status
+                            );
                         }
 
                         // If status changed from "not determined", we have an answer
@@ -508,7 +519,9 @@ pub async fn request_microphone_permission() -> Result<bool, String> {
                             // AVFoundation might not be working, try actual recording test
                             if check_microphone_by_recording() {
                                 drop(s);
-                                eprintln!("request_microphone_permission: authorized via recording test");
+                                eprintln!(
+                                    "request_microphone_permission: authorized via recording test"
+                                );
                                 return Ok(true);
                             }
                         }
@@ -518,7 +531,10 @@ pub async fn request_microphone_permission() -> Result<bool, String> {
 
                 // Timeout - do final checks
                 let final_status = get_av_authorization_status();
-                eprintln!("request_microphone_permission: timeout, final AVFoundation status = {}", final_status);
+                eprintln!(
+                    "request_microphone_permission: timeout, final AVFoundation status = {}",
+                    final_status
+                );
 
                 if final_status == 3 {
                     return Ok(true);
@@ -528,13 +544,19 @@ pub async fn request_microphone_permission() -> Result<bool, String> {
 
                 // Final fallback: try recording
                 let can_record = check_microphone_by_recording();
-                eprintln!("request_microphone_permission: fallback recording test = {}", can_record);
+                eprintln!(
+                    "request_microphone_permission: fallback recording test = {}",
+                    can_record
+                );
                 Ok(can_record)
             }
             Err(e) => {
                 // Stream creation failed - might be permission denied
                 let current_status = get_av_authorization_status();
-                eprintln!("request_microphone_permission: stream failed, status = {}, error = {}", current_status, e);
+                eprintln!(
+                    "request_microphone_permission: stream failed, status = {}, error = {}",
+                    current_status, e
+                );
 
                 if current_status == 3 {
                     Ok(true)
