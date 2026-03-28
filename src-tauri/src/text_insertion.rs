@@ -54,12 +54,11 @@ fn clear_modifiers(keycodes: &[i64]) {
     }
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-fn clear_modifiers(_keycodes: &[i64]) {}
 
 /// Insert text by copying to clipboard and pasting with Cmd+V.
 /// Uses AppleScript on macOS for reliable keystroke simulation.
 /// The keycodes parameter specifies which modifier keys to clear before pasting.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn insert_text_via_clipboard(text: &str, modifier_keycodes: &[i64]) -> Result<(), String> {
     // Clear any stuck modifier keys first
     clear_modifiers(modifier_keycodes);

@@ -385,6 +385,7 @@ fn get_av_authorization_status() -> i64 {
 }
 
 /// Play a sound when recording starts
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn play_start_sound() {
     #[cfg(target_os = "macos")]
     {
@@ -400,6 +401,7 @@ pub fn play_start_sound() {
 }
 
 /// Play a sound when recording stops
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn play_stop_sound() {
     #[cfg(target_os = "macos")]
     {
@@ -415,6 +417,7 @@ pub fn play_stop_sound() {
 }
 
 /// Play a sound when hotkey pressed but app is busy/loading
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn play_busy_sound() {
     #[cfg(target_os = "macos")]
     {
