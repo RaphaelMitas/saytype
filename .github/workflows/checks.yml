@@ -78,8 +78,6 @@ jobs:
   python:
     name: Python
     runs-on: [self-hosted, macos, arm64]
-    env:
-      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/../_tool
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6

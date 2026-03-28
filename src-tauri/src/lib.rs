@@ -113,6 +113,7 @@ async fn restart_app() -> Result<bool, String> {
         // Dev mode: can't restart because the Tauri CLI owns the process lifecycle
         return Ok(false);
     }
+    #[allow(unused_variables)]
     if let Ok(exe) = std::env::current_exe() {
         #[cfg(target_os = "macos")]
         {
@@ -215,6 +216,7 @@ async fn set_hotkey(
     }
 
     // Clear held keys when config changes
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     hotkey::clear_held_keys();
 
     // Save to config file
@@ -364,10 +366,13 @@ pub fn run() {
                 }
 
                 // Set up event tap on main run loop (no separate thread needed)
-                println!("[HOTKEY] Setting up event tap on main run loop...");
-                if let Err(e) = hotkey::setup_event_tap(app_handle.clone()) {
-                    eprintln!("[HOTKEY] Failed to set up event tap: {}", e);
-                    let _ = app_handle.emit("hotkey-error", e);
+                #[cfg(any(target_os = "macos", target_os = "windows"))]
+                {
+                    println!("[HOTKEY] Setting up event tap on main run loop...");
+                    if let Err(e) = hotkey::setup_event_tap(app_handle.clone()) {
+                        eprintln!("[HOTKEY] Failed to set up event tap: {}", e);
+                        let _ = app_handle.emit("hotkey-error", e);
+                    }
                 }
             } else {
                 println!("[SETUP] Server-only mode — skipping hotkey and permissions setup");
