@@ -1,6 +1,5 @@
 use objc2::msg_send;
 use objc2::runtime::{AnyClass, AnyObject};
-use std::ffi::CStr;
 use std::sync::OnceLock;
 
 /// Wrapper around a raw NSObject pointer to make it Send + Sync.
@@ -27,7 +26,7 @@ pub fn disable_app_nap() -> Result<(), String> {
         }
 
         let ns_string_class = AnyClass::get(c"NSString").ok_or("NSString class not found")?;
-        let reason_cstr = CStr::from_bytes_with_nul(b"Listening for global hotkey events\0").unwrap();
+        let reason_cstr = c"Listening for global hotkey events";
         let reason: *mut AnyObject = msg_send![ns_string_class,
             stringWithUTF8String: reason_cstr.as_ptr()];
 

@@ -78,11 +78,7 @@ function App() {
 
   return (
     <main className="container">
-      {showOnboarding ? (
-        <Onboarding onComplete={handleOnboardingComplete} />
-      ) : (
-        <Settings />
-      )}
+      {showOnboarding ? <Onboarding onComplete={handleOnboardingComplete} /> : <Settings />}
     </main>
   );
 }

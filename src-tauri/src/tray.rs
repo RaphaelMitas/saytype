@@ -1,15 +1,18 @@
+use std::sync::Mutex;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIcon, TrayIconBuilder},
     AppHandle, Manager,
 };
-use std::sync::Mutex;
 
 lazy_static::lazy_static! {
     static ref TRAY_ICON: Mutex<Option<TrayIcon>> = Mutex::new(None);
 }
 
-pub fn setup_tray_with_tooltip(app: &AppHandle, tooltip: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn setup_tray_with_tooltip(
+    app: &AppHandle,
+    tooltip: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     setup_tray_inner(app, tooltip)
 }
 

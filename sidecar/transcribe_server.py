@@ -18,8 +18,8 @@ import json
 import sys
 from pathlib import Path
 
-import soundfile as sf
 import mlx.core as mx
+import soundfile as sf
 from parakeet_mlx.audio import get_logmel
 
 # Global model cache
@@ -36,14 +36,15 @@ def load_model(model_name: str):
 
     try:
         from parakeet_mlx import from_pretrained
+
         _model = from_pretrained(model_name)
         _model_name = model_name
         return _model
     except ImportError as e:
-        print(json.dumps({
-            "success": False,
-            "error": f"Failed to import parakeet_mlx: {e}"
-        }), flush=True)
+        print(
+            json.dumps({"success": False, "error": f"Failed to import parakeet_mlx: {e}"}),
+            flush=True,
+        )
         sys.exit(1)
 
 
@@ -91,10 +92,7 @@ def transcribe_audio(audio_path: str, model_name: str) -> dict:
     try:
         # Verify file exists
         if not Path(audio_path).exists():
-            return {
-                "success": False,
-                "error": f"Audio file not found: {audio_path}"
-            }
+            return {"success": False, "error": f"Audio file not found: {audio_path}"}
 
         # Load model
         model = load_model(model_name)
@@ -107,7 +105,7 @@ def transcribe_audio(audio_path: str, model_name: str) -> dict:
             audio_data = audio_data.mean(axis=1)
 
         # Convert to mlx array (matching load_audio output format)
-        audio_mx = mx.array(audio_data.astype('float32'))
+        audio_mx = mx.array(audio_data.astype("float32"))
 
         # Get mel spectrogram
         mel = get_logmel(audio_mx, model.preprocessor_config)
@@ -116,16 +114,10 @@ def transcribe_audio(audio_path: str, model_name: str) -> dict:
         result = model.generate(mel)[0]
         text = result.text.strip()
 
-        return {
-            "success": True,
-            "text": text
-        }
+        return {"success": True, "text": text}
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 def server_mode(model_name: str):
@@ -134,7 +126,8 @@ def server_mode(model_name: str):
 
     Commands:
         {"command": "ping"} -> {"success": true, "message": "pong"}
-        {"command": "transcribe", "audio_path": "/path/to/file.wav"} -> {"success": true, "text": "..."}
+        {"command": "transcribe", "audio_path": "/path/to/file.wav"}
+            -> {"success": true, "text": "..."}
     """
     # Load model and warm up BEFORE reporting ready
     print(json.dumps({"status": "loading"}), flush=True)
@@ -150,27 +143,18 @@ def server_mode(model_name: str):
         try:
             request = json.loads(line)
         except json.JSONDecodeError as e:
-            print(json.dumps({
-                "success": False,
-                "error": f"Invalid JSON: {e}"
-            }), flush=True)
+            print(json.dumps({"success": False, "error": f"Invalid JSON: {e}"}), flush=True)
             continue
 
         command = request.get("command", "")
 
         if command == "ping":
-            print(json.dumps({
-                "success": True,
-                "message": "pong"
-            }), flush=True)
+            print(json.dumps({"success": True, "message": "pong"}), flush=True)
 
         elif command == "transcribe":
             audio_path = request.get("audio_path", "")
             if not audio_path:
-                print(json.dumps({
-                    "success": False,
-                    "error": "Missing audio_path"
-                }), flush=True)
+                print(json.dumps({"success": False, "error": "Missing audio_path"}), flush=True)
             else:
                 result = transcribe_audio(audio_path, model_name)
                 print(json.dumps(result), flush=True)
@@ -179,10 +163,9 @@ def server_mode(model_name: str):
             break
 
         else:
-            print(json.dumps({
-                "success": False,
-                "error": f"Unknown command: {command}"
-            }), flush=True)
+            print(
+                json.dumps({"success": False, "error": f"Unknown command: {command}"}), flush=True
+            )
 
 
 def http_server_mode(model_name: str, host: str, port: int):
@@ -194,7 +177,7 @@ def http_server_mode(model_name: str, host: str, port: int):
         POST /transcribe -> {"success": true, "text": "..."} (body: raw WAV bytes)
     """
     import tempfile
-    from http.server import HTTPServer, BaseHTTPRequestHandler
+    from http.server import BaseHTTPRequestHandler, HTTPServer
 
     class ReusableHTTPServer(HTTPServer):
         allow_reuse_address = True
@@ -270,34 +253,20 @@ def http_server_mode(model_name: str, host: str, port: int):
 
 def main():
     parser = argparse.ArgumentParser(description="Saytype Transcription Server")
-    parser.add_argument(
-        "--transcribe",
-        type=str,
-        help="Transcribe a single audio file and exit"
-    )
+    parser.add_argument("--transcribe", type=str, help="Transcribe a single audio file and exit")
     parser.add_argument(
         "--model",
         type=str,
         default="mlx-community/parakeet-tdt-0.6b-v3",
-        help="Parakeet model to use (default: parakeet-tdt-0.6b-v3)"
+        help="Parakeet model to use (default: parakeet-tdt-0.6b-v3)",
     )
     parser.add_argument(
-        "--http",
-        action="store_true",
-        help="Run as HTTP server instead of stdin/stdout IPC"
+        "--http", action="store_true", help="Run as HTTP server instead of stdin/stdout IPC"
     )
     parser.add_argument(
-        "--host",
-        type=str,
-        default="0.0.0.0",
-        help="HTTP server bind address (default: 0.0.0.0)"
+        "--host", type=str, default="0.0.0.0", help="HTTP server bind address (default: 0.0.0.0)"
     )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=8765,
-        help="HTTP server port (default: 8765)"
-    )
+    parser.add_argument("--port", type=int, default=8765, help="HTTP server port (default: 8765)")
     args = parser.parse_args()
 
     model_name = args.model

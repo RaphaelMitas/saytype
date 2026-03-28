@@ -168,8 +168,8 @@ async fn set_hotkey(
     let mut non_modifier_key: Option<i64> = None;
 
     for (i, code) in params.codes.iter().enumerate() {
-        let keycode = js_code_to_keycode(code)
-            .ok_or_else(|| format!("Unknown key code: {}", code))?;
+        let keycode =
+            js_code_to_keycode(code).ok_or_else(|| format!("Unknown key code: {}", code))?;
         let location = params.locations.get(i).copied().unwrap_or(0);
 
         keycodes.push(keycode);
@@ -190,7 +190,7 @@ async fn set_hotkey(
             match keycode {
                 0x5B | 0x5C => modifiers.push(Modifier::Command), // Win keys
                 0xA0 | 0xA1 => modifiers.push(Modifier::Shift),
-                0xA4 | 0xA5 => modifiers.push(Modifier::Option),  // Alt keys
+                0xA4 | 0xA5 => modifiers.push(Modifier::Option), // Alt keys
                 0xA2 | 0xA3 => modifiers.push(Modifier::Control),
                 _ => {}
             }
@@ -249,9 +249,13 @@ async fn test_sidecar(app_handle: tauri::AppHandle) -> Result<String, String> {
 
     // Write 1 second of silence
     for _ in 0..16000 {
-        writer.write_sample(0i16).map_err(|e| format!("Failed to write sample: {}", e))?;
+        writer
+            .write_sample(0i16)
+            .map_err(|e| format!("Failed to write sample: {}", e))?;
     }
-    writer.finalize().map_err(|e| format!("Failed to finalize WAV: {}", e))?;
+    writer
+        .finalize()
+        .map_err(|e| format!("Failed to finalize WAV: {}", e))?;
 
     println!("[TEST] Created test WAV at {}", test_path);
 
@@ -288,7 +292,11 @@ async fn get_network_config() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-async fn set_network_config(mode: config::AppMode, server_url: Option<String>, server_port: Option<u16>) -> Result<(), String> {
+async fn set_network_config(
+    mode: config::AppMode,
+    server_url: Option<String>,
+    server_port: Option<u16>,
+) -> Result<(), String> {
     let mut config = config::load_config();
     config.mode = mode;
     config.server_url = server_url;

@@ -287,7 +287,9 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
                     let text_clone = text.clone();
                     let keycodes = modifier_keycodes.clone();
                     let result = handle.run_on_main_thread(move || {
-                        if let Err(e) = text_insertion::insert_text_via_clipboard(&text_clone, &keycodes) {
+                        if let Err(e) =
+                            text_insertion::insert_text_via_clipboard(&text_clone, &keycodes)
+                        {
                             eprintln!("[DEBUG] Failed to insert text: {}", e);
                         }
                     });
