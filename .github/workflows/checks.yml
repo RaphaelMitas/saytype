@@ -82,13 +82,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
       - name: Install dependencies
-        run: pip install ruff pyright -r sidecar/requirements.txt
+        run: python3 -m pip install ruff pyright -r sidecar/requirements.txt
 
       - name: Lint check
         run: ruff check sidecar/
