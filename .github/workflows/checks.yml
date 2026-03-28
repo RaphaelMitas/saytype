@@ -82,14 +82,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Install dependencies
-        run: python3 -m pip install ruff pyright -r sidecar/requirements.txt
+      - name: Create venv and install dependencies
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install ruff pyright -r sidecar/requirements.txt
 
       - name: Lint check
-        run: ruff check sidecar/
+        run: |
+          source .venv/bin/activate
+          ruff check sidecar/
 
       - name: Format check
-        run: ruff format --check sidecar/
+        run: |
+          source .venv/bin/activate
+          ruff format --check sidecar/
 
       - name: Type check (Pyright)
-        run: pyright
+        run: |
+          source .venv/bin/activate
+          pyright
