@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to release'
+        required: true
+        type: string
 
 jobs:
   build-macos:
@@ -13,6 +19,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v6
@@ -38,12 +46,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Resolve tag name
+        id: tag
+        run: echo "TAG=${{ inputs.tag || github.ref_name }}" >> $GITHUB_OUTPUT
+
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+        run: |
+          TAG="${{ steps.tag.outputs.TAG }}"
+          echo "VERSION=${TAG#v}" >> $GITHUB_OUTPUT
 
       - name: Sync app version from tag
-        run: node scripts/set-version-from-tag.mjs "${{ github.ref_name }}"
+        run: node scripts/set-version-from-tag.mjs "${{ steps.tag.outputs.TAG }}"
 
       - name: Build Tauri app
         run: pnpm tauri build
@@ -123,6 +137,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -138,13 +154,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Resolve tag name
+        id: tag
+        shell: bash
+        run: echo "TAG=${{ inputs.tag || github.ref_name }}" >> $GITHUB_OUTPUT
+
       - name: Extract version from tag
         id: version
         shell: bash
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+        run: |
+          TAG="${{ steps.tag.outputs.TAG }}"
+          echo "VERSION=${TAG#v}" >> $GITHUB_OUTPUT
 
       - name: Sync app version from tag
-        run: node scripts/set-version-from-tag.mjs "${{ github.ref_name }}"
+        run: node scripts/set-version-from-tag.mjs "${{ steps.tag.outputs.TAG }}"
 
       - name: Build Tauri app
         run: pnpm tauri build
@@ -175,6 +198,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: |
             artifacts/macos-release/*
             artifacts/windows-release-msi/*
