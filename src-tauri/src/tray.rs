@@ -1,15 +1,18 @@
+use std::sync::Mutex;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIcon, TrayIconBuilder},
     AppHandle, Manager,
 };
-use std::sync::Mutex;
 
 lazy_static::lazy_static! {
     static ref TRAY_ICON: Mutex<Option<TrayIcon>> = Mutex::new(None);
 }
 
-pub fn setup_tray_with_tooltip(app: &AppHandle, tooltip: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn setup_tray_with_tooltip(
+    app: &AppHandle,
+    tooltip: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     setup_tray_inner(app, tooltip)
 }
 
@@ -54,6 +57,7 @@ fn setup_tray_inner(app: &AppHandle, tooltip: &str) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn set_recording_state(app: &AppHandle, is_recording: bool) {
     let tray_guard = TRAY_ICON.lock().unwrap();
     if let Some(ref tray) = *tray_guard {
@@ -82,6 +86,7 @@ pub fn set_recording_state(app: &AppHandle, is_recording: bool) {
     }
 }
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn try_load_icon(app: &AppHandle, tray: &TrayIcon, icon_name: &str) -> bool {
     // Try resource directory first (production)
     if let Ok(resource_path) = app.path().resource_dir() {

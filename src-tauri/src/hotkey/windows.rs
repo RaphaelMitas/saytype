@@ -4,9 +4,8 @@ use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, GetMessageW, SetWindowsHookExW, UnhookWindowsHookEx, HHOOK,
-    KBDLLHOOKSTRUCT, KBDLLHOOKSTRUCT_FLAGS, MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP,
-    WM_SYSKEYDOWN, WM_SYSKEYUP,
+    CallNextHookEx, GetMessageW, SetWindowsHookExW, UnhookWindowsHookEx, HHOOK, KBDLLHOOKSTRUCT,
+    KBDLLHOOKSTRUCT_FLAGS, MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
 
 use crate::{audio, text_insertion, transcriber, AppState};
@@ -97,15 +96,27 @@ fn disambiguate_vk(vk_code: i64, kb: &KBDLLHOOKSTRUCT) -> i64 {
     match vk_code {
         // VK_SHIFT → left or right based on scan code
         0x10 => {
-            if kb.scanCode == 0x36 { 0xA1 } else { 0xA0 } // VK_RSHIFT : VK_LSHIFT
+            if kb.scanCode == 0x36 {
+                0xA1
+            } else {
+                0xA0
+            } // VK_RSHIFT : VK_LSHIFT
         }
         // VK_CONTROL → left or right based on extended flag
         0x11 => {
-            if extended { 0xA3 } else { 0xA2 } // VK_RCONTROL : VK_LCONTROL
+            if extended {
+                0xA3
+            } else {
+                0xA2
+            } // VK_RCONTROL : VK_LCONTROL
         }
         // VK_MENU → left or right based on extended flag
         0x12 => {
-            if extended { 0xA5 } else { 0xA4 } // VK_RMENU : VK_LMENU
+            if extended {
+                0xA5
+            } else {
+                0xA4
+            } // VK_RMENU : VK_LMENU
         }
         other => other,
     }

@@ -1,0 +1,50 @@
+name: Daily Release
+
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes and create tag
+        id: tag
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No existing tags found, tagging as v0.1.0"
+            NEXT_TAG="v0.1.0"
+          else
+            COMMITS=$(git log "$LATEST_TAG"..HEAD --oneline)
+            if [ -z "$COMMITS" ]; then
+              echo "No new commits since $LATEST_TAG, skipping."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            CURRENT="${LATEST_TAG#v}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+            NEXT_PATCH=$((PATCH + 1))
+            NEXT_TAG="v$MAJOR.$MINOR.$NEXT_PATCH"
+            echo "New commits found since $LATEST_TAG, tagging as $NEXT_TAG"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$NEXT_TAG"
+          git push origin "$NEXT_TAG"
+          echo "tag=$NEXT_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger release workflow
+        if: steps.tag.outputs.skip != 'true'
+        run: gh workflow run release.yml --ref "${{ steps.tag.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

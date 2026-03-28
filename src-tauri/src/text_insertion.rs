@@ -1,12 +1,17 @@
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use arboard::Clipboard;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::thread;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::time::Duration;
 
 /// Clear any stuck modifier keys before typing.
 /// Posts FlagsChanged events with null flags to reset the keyboard modifier state.
 #[cfg(target_os = "macos")]
 fn clear_modifiers(keycodes: &[i64]) {
-    use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation, CGEventType, EventField};
+    use core_graphics::event::{
+        CGEvent, CGEventFlags, CGEventTapLocation, CGEventType, EventField,
+    };
     use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 
     // Post FlagsChanged event with null flags for each modifier keycode
@@ -52,24 +57,23 @@ fn clear_modifiers(keycodes: &[i64]) {
     }
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-fn clear_modifiers(_keycodes: &[i64]) {}
-
 /// Insert text by copying to clipboard and pasting with Cmd+V.
 /// Uses AppleScript on macOS for reliable keystroke simulation.
 /// The keycodes parameter specifies which modifier keys to clear before pasting.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn insert_text_via_clipboard(text: &str, modifier_keycodes: &[i64]) -> Result<(), String> {
     // Clear any stuck modifier keys first
     clear_modifiers(modifier_keycodes);
     thread::sleep(Duration::from_millis(100));
 
     // Save current clipboard content
-    let mut clipboard = Clipboard::new()
-        .map_err(|e| format!("Failed to access clipboard: {}", e))?;
+    let mut clipboard =
+        Clipboard::new().map_err(|e| format!("Failed to access clipboard: {}", e))?;
     let original_content = clipboard.get_text().ok();
 
     // Set new content
-    clipboard.set_text(text)
+    clipboard
+        .set_text(text)
         .map_err(|e| format!("Failed to set clipboard: {}", e))?;
 
     thread::sleep(Duration::from_millis(100));
@@ -94,11 +98,14 @@ pub fn insert_text_via_clipboard(text: &str, modifier_keycodes: &[i64]) -> Resul
         use enigo::{Direction, Enigo, Key, Keyboard, Settings};
         let mut enigo = Enigo::new(&Settings::default())
             .map_err(|e| format!("Failed to create Enigo: {}", e))?;
-        enigo.key(Key::Control, Direction::Press)
+        enigo
+            .key(Key::Control, Direction::Press)
             .map_err(|e| format!("Failed to press Ctrl: {}", e))?;
-        enigo.key(Key::Unicode('v'), Direction::Click)
+        enigo
+            .key(Key::Unicode('v'), Direction::Click)
             .map_err(|e| format!("Failed to click V: {}", e))?;
-        enigo.key(Key::Control, Direction::Release)
+        enigo
+            .key(Key::Control, Direction::Release)
             .map_err(|e| format!("Failed to release Ctrl: {}", e))?;
     }
 

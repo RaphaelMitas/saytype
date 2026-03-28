@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
-import { useRecording, checkPermissions, openAccessibilitySettings, openInputMonitoringSettings } from "../hooks/useRecording";
+import {
+  useRecording,
+  checkPermissions,
+  openAccessibilitySettings,
+  openInputMonitoringSettings,
+} from "../hooks/useRecording";
 
 interface HotkeyConfig {
   label: string;
@@ -41,7 +46,9 @@ export function Settings({ onClose }: SettingsProps) {
       .then((config) => setCurrentHotkey(config.label))
       .catch(console.error);
     // Load network config
-    invoke<{ mode: string; server_url: string | null; server_port: number | null }>("get_network_config")
+    invoke<{ mode: string; server_url: string | null; server_port: number | null }>(
+      "get_network_config",
+    )
       .then((config) => {
         setNetworkMode(config.mode as "local" | "client_only" | "server_only");
         setServerUrl(config.server_url || "");
@@ -49,60 +56,60 @@ export function Settings({ onClose }: SettingsProps) {
       })
       .catch(console.error);
     // Load local IP
-    invoke<string>("get_local_ip")
-      .then(setLocalIp)
-      .catch(console.error);
+    invoke<string>("get_local_ip").then(setLocalIp).catch(console.error);
     // Detect platform
-    invoke<string>("get_platform")
-      .then(setPlatform)
-      .catch(console.error);
-    getVersion()
-      .then(setAppVersion)
-      .catch(console.error);
+    invoke<string>("get_platform").then(setPlatform).catch(console.error);
+    getVersion().then(setAppVersion).catch(console.error);
   }, []);
 
   // Handle hotkey recording
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (!isListeningForHotkey) return;
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (!isListeningForHotkey) return;
 
-    e.preventDefault();
-    e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
 
-    const code = e.code;
-    const location = e.location;
+      const code = e.code;
+      const location = e.location;
 
-    setPendingKeys((prev) => {
-      if (!prev.some((k) => k.code === code)) {
-        return [...prev, { code, location }];
+      setPendingKeys((prev) => {
+        if (!prev.some((k) => k.code === code)) {
+          return [...prev, { code, location }];
+        }
+        return prev;
+      });
+    },
+    [isListeningForHotkey],
+  );
+
+  const handleKeyUp = useCallback(
+    async (e: KeyboardEvent) => {
+      if (!isListeningForHotkey) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      // When any key is released, save the combo
+      if (pendingKeys.length > 0) {
+        try {
+          const codes = pendingKeys.map((k) => k.code);
+          const locations = pendingKeys.map((k) => k.location);
+
+          const result = await invoke<HotkeyConfig>("set_hotkey", {
+            params: { codes, locations },
+          });
+          setCurrentHotkey(result.label);
+        } catch (error) {
+          console.error("Failed to set hotkey:", error);
+        }
+
+        setIsListeningForHotkey(false);
+        setPendingKeys([]);
       }
-      return prev;
-    });
-  }, [isListeningForHotkey]);
-
-  const handleKeyUp = useCallback(async (e: KeyboardEvent) => {
-    if (!isListeningForHotkey) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    // When any key is released, save the combo
-    if (pendingKeys.length > 0) {
-      try {
-        const codes = pendingKeys.map((k) => k.code);
-        const locations = pendingKeys.map((k) => k.location);
-
-        const result = await invoke<HotkeyConfig>("set_hotkey", {
-          params: { codes, locations }
-        });
-        setCurrentHotkey(result.label);
-      } catch (error) {
-        console.error("Failed to set hotkey:", error);
-      }
-
-      setIsListeningForHotkey(false);
-      setPendingKeys([]);
-    }
-  }, [isListeningForHotkey, pendingKeys]);
+    },
+    [isListeningForHotkey, pendingKeys],
+  );
 
   useEffect(() => {
     if (isListeningForHotkey) {
@@ -188,7 +195,7 @@ export function Settings({ onClose }: SettingsProps) {
       setTestStatus("Recording for 3 seconds... Speak now!");
 
       // Wait 3 seconds
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
       setTestStatus("Stopping and transcribing...");
       const result = await invoke<string>("test_stop_and_transcribe");
@@ -234,7 +241,11 @@ export function Settings({ onClose }: SettingsProps) {
     setServerPort(port);
     if (networkMode === "server_only") {
       try {
-        await invoke("set_network_config", { mode: networkMode, serverUrl: null, serverPort: port });
+        await invoke("set_network_config", {
+          mode: networkMode,
+          serverUrl: null,
+          serverPort: port,
+        });
       } catch (error) {
         console.error("Failed to save server port:", error);
       }
@@ -244,7 +255,11 @@ export function Settings({ onClose }: SettingsProps) {
   const handleApplyServerUrl = async () => {
     if (!serverUrl) return;
     try {
-      await invoke("set_network_config", { mode: networkMode, serverUrl: serverUrl || null, serverPort: null });
+      await invoke("set_network_config", {
+        mode: networkMode,
+        serverUrl: serverUrl || null,
+        serverPort: null,
+      });
       const restarted = await invoke<boolean>("restart_app");
       if (!restarted) {
         setNeedsRestart(true);
@@ -262,7 +277,9 @@ export function Settings({ onClose }: SettingsProps) {
     setConnectionStatus("Connecting...");
     try {
       const ready = await invoke<boolean>("test_remote_connection", { serverUrl });
-      setConnectionStatus(ready ? "Connected - server ready" : "Connected - server still loading model");
+      setConnectionStatus(
+        ready ? "Connected - server ready" : "Connected - server still loading model",
+      );
     } catch (error) {
       setConnectionStatus(`Failed: ${error}`);
     }
@@ -274,9 +291,7 @@ export function Settings({ onClose }: SettingsProps) {
         if (networkMode === "client_only") {
           return serverUrl ? "Connecting to server..." : "No server URL configured";
         }
-        return networkMode === "server_only"
-          ? "Starting server..."
-          : "Loading model...";
+        return networkMode === "server_only" ? "Starting server..." : "Loading model...";
       case "recording":
         return "Recording...";
       case "processing":
@@ -325,16 +340,21 @@ export function Settings({ onClose }: SettingsProps) {
         <section className="test-section">
           <h2>Test</h2>
           <div className="button-group">
-            <button onClick={handleTestRecording} disabled={isRecording || state === "initializing"}>
-              {isRecording ? "Recording..." : state === "initializing" ? "Loading..." : "Test Record (3s)"}
+            <button
+              onClick={handleTestRecording}
+              disabled={isRecording || state === "initializing"}
+            >
+              {isRecording
+                ? "Recording..."
+                : state === "initializing"
+                  ? "Loading..."
+                  : "Test Record (3s)"}
             </button>
             <button onClick={handleTestSidecar} disabled={state === "initializing"}>
               {state === "initializing" ? "Loading..." : "Test Sidecar"}
             </button>
           </div>
-          {testStatus && (
-            <p className="test-status">{testStatus}</p>
-          )}
+          {testStatus && <p className="test-status">{testStatus}</p>}
         </section>
       )}
 
@@ -358,9 +378,7 @@ export function Settings({ onClose }: SettingsProps) {
               </button>
             )}
           </div>
-          <p className="hint">
-            Hold the hotkey to start recording, release to transcribe.
-          </p>
+          <p className="hint">Hold the hotkey to start recording, release to transcribe.</p>
         </section>
       )}
 
@@ -371,7 +389,9 @@ export function Settings({ onClose }: SettingsProps) {
             <div className="mode-track">
               <div
                 className="mode-thumb"
-                style={{ transform: `translateX(${networkMode === "local" ? 0 : networkMode === "client_only" ? 100 : 200}%)` }}
+                style={{
+                  transform: `translateX(${networkMode === "local" ? 0 : networkMode === "client_only" ? 100 : 200}%)`,
+                }}
               />
               {(["local", "client_only", "server_only"] as const).map((mode) => (
                 <button
@@ -387,11 +407,7 @@ export function Settings({ onClose }: SettingsProps) {
         ) : (
           <p className="hint">Client mode — connects to a remote Saytype server.</p>
         )}
-        {needsRestart && (
-          <div className="restart-banner">
-            Restart to apply
-          </div>
-        )}
+        {needsRestart && <div className="restart-banner">Restart to apply</div>}
         <div className={`mode-details ${networkMode !== "local" ? "visible" : ""}`}>
           {networkMode === "client_only" && (
             <div className="mode-detail-content">
@@ -406,12 +422,14 @@ export function Settings({ onClose }: SettingsProps) {
                 />
               </div>
               <div className="button-group">
-                <button onClick={handleApplyServerUrl} disabled={!serverUrl}>Apply</button>
-                <button className="secondary" onClick={handleTestConnection}>Test</button>
+                <button onClick={handleApplyServerUrl} disabled={!serverUrl}>
+                  Apply
+                </button>
+                <button className="secondary" onClick={handleTestConnection}>
+                  Test
+                </button>
               </div>
-              {connectionStatus && (
-                <p className="test-status">{connectionStatus}</p>
-              )}
+              {connectionStatus && <p className="test-status">{connectionStatus}</p>}
             </div>
           )}
           {networkMode === "server_only" && (
@@ -436,7 +454,9 @@ export function Settings({ onClose }: SettingsProps) {
                     setTimeout(() => setCopied(false), 1500);
                   }}
                 >
-                  <span className="copy-url-text">http://{localIp}:{serverPort}</span>
+                  <span className="copy-url-text">
+                    http://{localIp}:{serverPort}
+                  </span>
                   <span className="copy-url-icon">{copied ? "Copied!" : "Copy"}</span>
                 </button>
               )}
@@ -447,8 +467,8 @@ export function Settings({ onClose }: SettingsProps) {
           {networkMode === "local"
             ? "Transcription runs entirely on-device."
             : networkMode === "client_only"
-            ? "Audio is sent to a remote Saytype server."
-            : "Serves transcription over HTTP. Hotkey disabled."}
+              ? "Audio is sent to a remote Saytype server."
+              : "Serves transcription over HTTP. Hotkey disabled."}
         </p>
       </section>
 
