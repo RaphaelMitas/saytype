@@ -31,9 +31,6 @@ jobs:
       - name: Format check (Prettier)
         run: pnpm prettier --check "src/**/*.{ts,tsx,css}"
 
-      - name: Type check (Python)
-        run: pnpm pyright
-
   rust:
     name: Rust
     runs-on: ubuntu-latest
@@ -75,7 +72,7 @@ jobs:
 
   python:
     name: Python
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macos, arm64]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -85,11 +82,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install ruff
-        run: pip install ruff
+      - name: Install dependencies
+        run: pip install ruff pyright -r sidecar/requirements.txt
 
       - name: Lint check
         run: ruff check sidecar/
 
       - name: Format check
         run: ruff format --check sidecar/
+
+      - name: Type check (Pyright)
+        run: pyright
