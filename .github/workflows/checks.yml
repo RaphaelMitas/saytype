@@ -64,6 +64,11 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      - name: Create dummy sidecar binary
+        run: |
+          mkdir -p src-tauri/binaries
+          touch src-tauri/binaries/transcribe-server-x86_64-unknown-linux-gnu
+
       - name: Format check
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
