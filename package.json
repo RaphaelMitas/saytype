@@ -34,7 +34,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "prettier": "^3.8.1",
     "pyright": "^1.1.408",
-    "typescript": "~5.9.0",
+    "typescript": "~6.0.0",
     "typescript-eslint": "^8.57.2",
     "vite": "^8.0.0"
   }
