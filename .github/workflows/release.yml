@@ -22,30 +22,6 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.14'
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
-
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Build sidecar
-        run: |
-          cd sidecar
-          ./build.sh
-
-      - name: Install dependencies
-        run: pnpm install
-
       - name: Resolve tag name
         id: tag
         run: echo "TAG=${{ inputs.tag || github.ref_name }}" >> $GITHUB_OUTPUT
@@ -56,11 +32,10 @@ jobs:
           TAG="${{ steps.tag.outputs.TAG }}"
           echo "VERSION=${TAG#v}" >> $GITHUB_OUTPUT
 
-      - name: Sync app version from tag
-        run: node scripts/set-version-from-tag.mjs "${{ steps.tag.outputs.TAG }}"
-
-      - name: Build Tauri app
-        run: pnpm tauri build
+      - name: Build macOS app
+        uses: ./.github/actions/build-macos
+        with:
+          tag: ${{ steps.tag.outputs.TAG }}
 
       - name: Import certificate
         env:

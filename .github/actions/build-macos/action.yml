@@ -1,0 +1,44 @@
+name: Build macOS
+description: Setup toolchains, build sidecar, and build Tauri app
+
+inputs:
+  tag:
+    description: "Git tag for version sync (optional, skipped if empty)"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.14"
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: "24"
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v5
+
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Build sidecar
+      shell: bash
+      run: cd sidecar && ./build.sh
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install
+
+    - name: Sync app version from tag
+      if: inputs.tag != ''
+      shell: bash
+      run: node scripts/set-version-from-tag.mjs "${{ inputs.tag }}"
+
+    - name: Build Tauri app
+      shell: bash
+      run: pnpm tauri build
