@@ -86,7 +86,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: [self-hosted, macos, arm64]
+    runs-on: macos-15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -96,10 +96,15 @@ jobs:
 
   python:
     name: Python
-    runs-on: [self-hosted, macos, arm64]
+    runs-on: macos-15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
 
       - name: Create venv and install dependencies
         run: |
