@@ -11,13 +11,6 @@
   ],
   "packageRules": [
     {
-      "groupName": "tauri",
-      "matchPackageNames": [
-        "/^tauri/",
-        "/^@tauri-apps//"
-      ]
-    },
-    {
       "groupName": "react",
       "matchPackageNames": [
         "react",
@@ -38,6 +31,14 @@
     {
       "groupName": "github actions",
       "matchManagers": ["github-actions"]
+    },
+    {
+      "description": "Must stay last: the Rust crate and the npm package must bump together or `tauri build` aborts on a major/minor mismatch. Later rules win, so this reclaims the tauri crates from the cargo-wide group above.",
+      "groupName": "tauri",
+      "matchPackageNames": [
+        "/^tauri/",
+        "/^@tauri-apps//"
+      ]
     }
   ],
   "pip_requirements": {
