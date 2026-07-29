@@ -45,8 +45,11 @@ SAYTYPE_E2E_TIMEOUT_SECS="${SAYTYPE_E2E_TIMEOUT_SECS:-900}" \
 STATUS=$?
 set -e
 
-# A crashed app can leave the sidecar holding the model in memory.
-pkill -f transcribe-server >/dev/null 2>&1 || true
+# Last-resort net: the harness kills its own children on exit (e2e::finish),
+# but a crashed app can still leave the sidecar holding the model in memory.
+# Match on the tested bundle's path so a live Saytype installed elsewhere
+# keeps its sidecar.
+pkill -f "$(dirname "$APP_BIN")/transcribe-server" >/dev/null 2>&1 || true
 
 if [ $STATUS -ne 0 ]; then
     echo "App E2E FAILED (exit $STATUS)" >&2

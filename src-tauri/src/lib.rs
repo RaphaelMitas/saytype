@@ -400,7 +400,7 @@ pub fn run() {
                     let _ = handle_clone.emit("sidecar-error", e.clone());
                     if e2e_audio.is_some() {
                         eprintln!("[E2E] FAIL: backend init error: {}", e);
-                        std::process::exit(1);
+                        e2e::finish(1);
                     }
                 }
 

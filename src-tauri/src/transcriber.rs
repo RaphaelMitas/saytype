@@ -89,6 +89,10 @@ pub async fn initialize(app_handle: &tauri::AppHandle) -> Result<(), String> {
                 .spawn()
                 .map_err(|e| format!("Failed to spawn sidecar in HTTP mode: {}", e))?;
 
+            // This child is never stored anywhere killable, so E2E teardown
+            // must know its PID.
+            crate::e2e::register_child(child.id());
+
             let stdout = child.stdout.take().ok_or("Failed to get sidecar stdout")?;
             let reader = std::io::BufReader::new(stdout);
 

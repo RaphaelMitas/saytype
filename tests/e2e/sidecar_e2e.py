@@ -28,6 +28,11 @@ import threading
 import time
 from pathlib import Path
 
+# Guard before any `X | Y` annotation in a def is evaluated — on 3.9 (stock
+# macOS python3) those raise an opaque TypeError at import.
+if sys.version_info < (3, 10):
+    sys.exit(f"sidecar_e2e.py needs Python >= 3.10, found {sys.version.split()[0]}")
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "hello.wav"
 DEFAULT_EXPECT = "The quick brown fox jumps over the lazy dog."
@@ -44,8 +49,12 @@ class TestFailure(Exception):
 
 
 def normalize(text: str) -> str:
-    """Casing and punctuation are not part of the contract; words are."""
-    return re.sub(r"[^a-z0-9 ]", "", text.lower()).strip()
+    """Casing and punctuation are not part of the contract; words are.
+
+    Keep in sync with `normalize` in src-tauri/src/e2e.rs: punctuation maps to
+    a space and runs collapse, so "twenty-one" == "twenty one" in both suites.
+    """
+    return " ".join(re.sub(r"[^a-z0-9]", " ", text.lower()).split())
 
 
 def assert_transcript(actual: str, expected: str, mode: str) -> None:
@@ -158,7 +167,9 @@ def test_ipc_mode(binary: Path, fixture: Path, expected: str) -> None:
         assert proc.stdin is not None
 
         # sidecar.rs expects exactly this handshake: loading, then ready.
-        loading = next_json(stdout, 60.0)
+        # READY_TIMEOUT even for the first line: PyInstaller onefile re-extracts
+        # the bundle and imports mlx before the sidecar prints anything.
+        loading = next_json(stdout, READY_TIMEOUT)
         if loading.get("status") != "loading":
             raise TestFailure(f"expected status 'loading' first, got {loading}")
 

@@ -79,25 +79,12 @@ pub fn get_sidecar_path(app_handle: &tauri::AppHandle) -> Result<std::path::Path
     ))
 }
 
-pub async fn start(app_handle: &tauri::AppHandle) -> Result<(), String> {
-    let program = get_sidecar_path(app_handle)?;
-
-    println!("[SIDECAR] Spawning: {:?}", program);
-
-    // Spawn with stdio pipes (inherit stderr so we see Python debug output)
-    let mut child = std::process::Command::new(&program)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
-
-    let stdin = child.stdin.take().ok_or("Failed to get sidecar stdin")?;
-    let stdout = child.stdout.take().ok_or("Failed to get sidecar stdout")?;
-
-    let mut reader = BufReader::new(stdout);
-
-    // Wait for loading signal
+/// Reads the sidecar's startup handshake: `{"status": "loading"}` (optional)
+/// followed by `{"status": "ready"}`.
+fn wait_for_ready(
+    reader: &mut BufReader<ChildStdout>,
+    app_handle: &tauri::AppHandle,
+) -> Result<(), String> {
     let mut line = String::new();
     reader
         .read_line(&mut line)
@@ -110,7 +97,6 @@ pub async fn start(app_handle: &tauri::AppHandle) -> Result<(), String> {
         println!("[SIDECAR] Model is loading...");
         let _ = app_handle.emit("sidecar-loading", ());
 
-        // Wait for ready signal
         line.clear();
         reader
             .read_line(&mut line)
@@ -124,6 +110,48 @@ pub async fn start(app_handle: &tauri::AppHandle) -> Result<(), String> {
         }
     } else if response.status.as_deref() != Some("ready") {
         return Err(format!("Unexpected sidecar response: {}", line));
+    }
+
+    Ok(())
+}
+
+pub async fn start(app_handle: &tauri::AppHandle) -> Result<(), String> {
+    let program = get_sidecar_path(app_handle)?;
+
+    println!("[SIDECAR] Spawning: {:?}", program);
+
+    // Spawn with stdio pipes (inherit stderr so we see Python debug output)
+    let mut child = std::process::Command::new(&program)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn sidecar: {}", e))?;
+
+    crate::e2e::register_child(child.id());
+
+    let stdin = child.stdin.take().ok_or_else(|| {
+        let _ = child.kill();
+        let _ = child.wait();
+        "Failed to get sidecar stdin".to_string()
+    })?;
+    let stdout = match child.stdout.take() {
+        Some(stdout) => stdout,
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("Failed to get sidecar stdout".to_string());
+        }
+    };
+
+    let mut reader = BufReader::new(stdout);
+
+    // A child dropped on the error path stays alive (Child's Drop does not
+    // kill), so a failed handshake must reap it here.
+    if let Err(e) = wait_for_ready(&mut reader, app_handle) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(e);
     }
 
     // Store the process
@@ -148,8 +176,13 @@ pub async fn start(app_handle: &tauri::AppHandle) -> Result<(), String> {
 }
 
 /// Stops the sidecar, asking politely first. Safe to call when none is running.
+///
+/// Only try-locks: transcribe() holds the SIDECAR lock across a blocking read,
+/// so a wedged sidecar would deadlock any caller that waited for it — exactly
+/// the state the E2E watchdog calls this from. When the lock is contended the
+/// caller must clean up by PID instead (see e2e::finish).
 pub fn shutdown() {
-    let Ok(mut sidecar) = SIDECAR.lock() else {
+    let Ok(mut sidecar) = SIDECAR.try_lock() else {
         return;
     };
     let Some(mut process) = sidecar.take() else {
