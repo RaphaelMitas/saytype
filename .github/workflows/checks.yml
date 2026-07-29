@@ -85,7 +85,7 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
   build:
-    name: Build
+    name: Build & E2E
     runs-on: macos-15
     steps:
       - name: Checkout repository
