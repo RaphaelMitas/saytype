@@ -145,7 +145,7 @@ pub fn load_config() -> AppConfig {
                     Ok(contents) => match serde_json::from_str(&contents) {
                         Ok(config) => {
                             println!("[CONFIG] Loaded config from {:?}", path);
-                            return config;
+                            return crate::e2e::apply_mode_override(config);
                         }
                         Err(e) => {
                             eprintln!("[CONFIG] Failed to parse config: {}", e);
@@ -162,7 +162,7 @@ pub fn load_config() -> AppConfig {
         }
     }
     println!("[CONFIG] Using default config");
-    AppConfig::default()
+    crate::e2e::apply_mode_override(AppConfig::default())
 }
 
 /// Save configuration to disk

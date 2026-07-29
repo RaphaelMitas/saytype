@@ -164,6 +164,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      # Job-level so the tap-dispatch step can guard on it: neither `secrets`
+      # nor a step's own `env` are usable in a step-level `if`.
+      TAP_TOKEN: ${{ secrets.TAP_DISPATCH_TOKEN }}
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v8
@@ -181,3 +185,17 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The tap constructs the asset name as <repo>-<version>.zip, i.e.
+      # saytype-X.Y.Z.zip; GitHub resolves release asset names
+      # case-insensitively, so that matches the Saytype-X.Y.Z.zip we upload.
+      - name: Update Homebrew tap
+        if: ${{ env.TAP_TOKEN != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.TAP_DISPATCH_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          gh workflow run update-cask.yml -R RaphaelMitas/homebrew-tap \
+            -f cask_name=saytype \
+            -f release_tag="$TAG" \
+            -f source_repo=RaphaelMitas/saytype

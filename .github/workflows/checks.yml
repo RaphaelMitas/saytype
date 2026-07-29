@@ -85,14 +85,40 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
   build:
-    name: Build
+    name: Build & E2E
     runs-on: macos-15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      # The Parakeet weights are ~1.2GB and immutable.
+      - name: Cache HuggingFace model
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-hf-parakeet-tdt-0.6b-v3
+
+      # Also runs both E2E suites: the sidecar is built once here (inside
+      # build-macos), so a separate E2E job would rebuild the identical
+      # binary on a second runner and pin its own Python version that could
+      # drift from the one the shipped binary is built with.
       - name: Build macOS app
         uses: ./.github/actions/build-macos
+
+      # Runs the frozen binary in all three modes the Rust side speaks:
+      # --transcribe, stdin/stdout IPC, and --http. PyInstaller breakage
+      # (missing hidden imports, missing MLX data files) only shows up here.
+      - name: E2E — sidecar protocol and transcription
+        timeout-minutes: 25
+        run: |
+          TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
+          python3 tests/e2e/sidecar_e2e.py "src-tauri/binaries/transcribe-server-$TRIPLE"
+
+      # Exercises the real bundle: sidecar lookup inside Saytype.app, spawn,
+      # ready handshake, and the full Rust -> Python -> Rust round trip.
+      - name: E2E — bundled app transcribes fixture
+        timeout-minutes: 25
+        run: ./tests/e2e/app_e2e.sh
 
   python:
     name: Python
@@ -116,12 +142,12 @@ jobs:
       - name: Lint check
         run: |
           source .venv/bin/activate
-          ruff check sidecar/
+          ruff check sidecar/ tests/
 
       - name: Format check
         run: |
           source .venv/bin/activate
-          ruff format --check sidecar/
+          ruff format --check sidecar/ tests/
 
       - name: Type check (Pyright)
         run: |

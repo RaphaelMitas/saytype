@@ -1,5 +1,5 @@
 {
-  "include": ["sidecar"],
+  "include": ["sidecar", "tests"],
   "pythonVersion": "3.10",
   "typeCheckingMode": "basic"
 }
