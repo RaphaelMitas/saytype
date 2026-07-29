@@ -2,6 +2,7 @@
 mod app_nap;
 mod audio;
 mod config;
+mod e2e;
 mod hotkey;
 mod remote;
 mod sidecar;
@@ -336,9 +337,18 @@ pub fn run() {
             let app_handle = app.handle().clone();
             let app_config = config::load_config();
             let is_server_only = app_config.mode == config::AppMode::ServerOnly;
+            // Headless CI run: no permissions, no window, no user to drive it.
+            let is_e2e = e2e::is_enabled();
+
+            if is_e2e {
+                println!("[E2E] Headless mode — skipping tray, window, and hotkey setup");
+                e2e::spawn_watchdog();
+            }
 
             // Initialize system tray
-            if is_server_only {
+            if is_e2e {
+                // Skipped: a status item needs a GUI session the runner may not have.
+            } else if is_server_only {
                 let port = app_config.server_port.unwrap_or(8765);
                 tray::setup_tray_with_tooltip(&app_handle, &format!("Saytype - Server :{}", port))?;
             } else {
@@ -346,12 +356,14 @@ pub fn run() {
             }
 
             // Open settings window on launch
-            if let Some(window) = app.get_webview_window("settings") {
-                let _ = window.show();
-                let _ = window.set_focus();
+            if !is_e2e {
+                if let Some(window) = app.get_webview_window("settings") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
             }
 
-            if !is_server_only {
+            if !is_server_only && !is_e2e {
                 // Check accessibility permission before starting hotkey listener (macOS only)
                 #[cfg(target_os = "macos")]
                 if !text_insertion::check_accessibility_permission() {
@@ -374,17 +386,26 @@ pub fn run() {
                         let _ = app_handle.emit("hotkey-error", e);
                     }
                 }
-            } else {
+            } else if is_server_only {
                 println!("[SETUP] Server-only mode — skipping hotkey and permissions setup");
             }
 
             // Initialize transcription backend (local sidecar, remote server, or HTTP server)
             let handle_clone = app_handle.clone();
+            let e2e_audio = e2e::audio_path();
             tauri::async_runtime::spawn(async move {
                 println!("[TRANSCRIBER] Initializing transcription backend...");
                 if let Err(e) = transcriber::initialize(&handle_clone).await {
                     eprintln!("[TRANSCRIBER] Failed to initialize: {}", e);
-                    let _ = handle_clone.emit("sidecar-error", e);
+                    let _ = handle_clone.emit("sidecar-error", e.clone());
+                    if e2e_audio.is_some() {
+                        eprintln!("[E2E] FAIL: backend init error: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+
+                if let Some(audio_path) = e2e_audio {
+                    e2e::run(&handle_clone, &audio_path).await;
                 }
             });
 

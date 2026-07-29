@@ -2,6 +2,7 @@ use serde::Deserialize;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
 
 #[derive(Deserialize)]
@@ -17,7 +18,7 @@ struct StatusResponse {
 }
 
 struct SidecarProcess {
-    _child: Child,
+    child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
 }
@@ -129,7 +130,7 @@ pub async fn start(app_handle: &tauri::AppHandle) -> Result<(), String> {
     {
         let mut sidecar = SIDECAR.lock().map_err(|e| e.to_string())?;
         *sidecar = Some(SidecarProcess {
-            _child: child,
+            child,
             stdin,
             stdout: reader,
         });
@@ -144,6 +145,33 @@ pub async fn start(app_handle: &tauri::AppHandle) -> Result<(), String> {
 
     println!("Sidecar is ready");
     Ok(())
+}
+
+/// Stops the sidecar, asking politely first. Safe to call when none is running.
+pub fn shutdown() {
+    let Ok(mut sidecar) = SIDECAR.lock() else {
+        return;
+    };
+    let Some(mut process) = sidecar.take() else {
+        return;
+    };
+
+    let _ = writeln!(process.stdin, "{}", serde_json::json!({"command": "quit"}));
+    let _ = process.stdin.flush();
+    drop(process.stdin);
+
+    // Poll briefly for a clean exit before resorting to SIGKILL.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        match process.child.try_wait() {
+            Ok(Some(_)) => return,
+            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+            Err(_) => break,
+        }
+    }
+
+    let _ = process.child.kill();
+    let _ = process.child.wait();
 }
 
 pub async fn transcribe(

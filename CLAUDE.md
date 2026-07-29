@@ -93,6 +93,26 @@ Sidecar binary naming follows Tauri convention: `transcribe-server-{arch}-apple-
 
 ## Testing
 
-No automated test framework. Manual testing via Settings UI:
-- "Test Record (3s)" - Records audio and transcribes
-- "Test Sidecar" - Sends silent WAV to verify sidecar works
+```bash
+pnpm test           # Rust unit tests
+pnpm e2e:sidecar    # Sidecar E2E — needs sidecar/build.sh to have run
+pnpm e2e:app        # Bundled app E2E — needs pnpm tauri build to have run
+```
+
+Both E2E suites transcribe `tests/fixtures/hello.wav` (generated with macOS
+`say`) and assert the transcript, ignoring case and punctuation.
+
+- `tests/e2e/sidecar_e2e.py` runs the *frozen* sidecar binary in all three modes
+  the Rust side speaks: `--transcribe`, stdin/stdout IPC, and `--http`. This is
+  where PyInstaller breakage surfaces.
+- `tests/e2e/app_e2e.sh` runs the real bundled app via the headless harness in
+  `src-tauri/src/e2e.rs`, covering sidecar lookup inside `Saytype.app`, spawn,
+  the ready handshake, and the Rust ↔ Python round trip.
+
+The headless harness is driven by env vars — `SAYTYPE_E2E_AUDIO` enables it,
+`SAYTYPE_E2E_EXPECT` asserts the transcript, `SAYTYPE_E2E_MODE` pins local vs
+client vs server, `SAYTYPE_E2E_TIMEOUT_SECS` bounds the run.
+
+Not covered automatically: the hotkey capture and clipboard-paste layers need
+TCC permissions and a real input device, so they stay manual — test via the
+Settings UI ("Test Record (3s)", "Test Sidecar").
