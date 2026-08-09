@@ -9,6 +9,19 @@
   "labels": [
     "dependencies"
   ],
+  "prConcurrentLimit": 2,
+  "minimumReleaseAge": "3 days",
+  "vulnerabilityAlerts": {
+    "description": "Security fixes bundle into a single PR and bypass prConcurrentLimit (Renovate exempts vulnerability alerts from PR/branch limits).",
+    "groupName": "security fixes",
+    "labels": [
+      "dependencies",
+      "security"
+    ],
+    "prCreation": "immediate",
+    "minimumReleaseAge": null,
+    "schedule": []
+  },
   "packageRules": [
     {
       "groupName": "react",
@@ -20,11 +33,6 @@
       ]
     },
     {
-      "groupName": "rust dependencies (non-major)",
-      "matchManagers": ["cargo"],
-      "matchUpdateTypes": ["minor", "patch"]
-    },
-    {
       "groupName": "build tools",
       "matchPackageNames": ["/^vite/", "/^@vitejs/", "typescript"]
     },
@@ -33,7 +41,12 @@
       "matchManagers": ["github-actions"]
     },
     {
-      "description": "Must stay last: the Rust crate and the npm package must bump together or `tauri build` aborts on a major/minor mismatch. Later rules win, so this reclaims the tauri crates from the cargo-wide group above.",
+      "description": "One PR for every non-major update across all managers. Placed after the groups above so they only apply to majors, which still get their own PRs.",
+      "groupName": "all non-major dependencies",
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin"]
+    },
+    {
+      "description": "Must stay last: the Rust crate and the npm package must bump together or `tauri build` aborts on a major/minor mismatch. Later rules win, so this reclaims the tauri packages from the non-major group above.",
       "groupName": "tauri",
       "matchPackageNames": [
         "/^tauri/",
