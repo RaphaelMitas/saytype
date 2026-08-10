@@ -72,7 +72,7 @@ impl PushToTalkRecorder {
                 let samples_clone = Arc::clone(&samples);
                 device
                     .build_input_stream(
-                        &config.into(),
+                        config.into(),
                         move |data: &[f32], _: &cpal::InputCallbackInfo| {
                             if let Ok(mut buffer) = samples_clone.lock() {
                                 buffer.extend_from_slice(data);
@@ -89,7 +89,7 @@ impl PushToTalkRecorder {
                 let samples_clone = Arc::clone(&samples);
                 device
                     .build_input_stream(
-                        &config.into(),
+                        config.into(),
                         move |data: &[i16], _: &cpal::InputCallbackInfo| {
                             if let Ok(mut buffer) = samples_clone.lock() {
                                 // Convert i16 to f32
@@ -109,7 +109,7 @@ impl PushToTalkRecorder {
                 let samples_clone = Arc::clone(&samples);
                 device
                     .build_input_stream(
-                        &config.into(),
+                        config.into(),
                         move |data: &[u16], _: &cpal::InputCallbackInfo| {
                             if let Ok(mut buffer) = samples_clone.lock() {
                                 // Convert u16 to f32 (centered at 0)
@@ -315,7 +315,7 @@ fn check_microphone_by_recording() -> bool {
 
     // Try to build and start a stream
     let stream = device.build_input_stream_raw(
-        &config.config(),
+        config.config(),
         config.sample_format(),
         move |_data: &cpal::Data, _: &cpal::InputCallbackInfo| {},
         move |_err| {},
@@ -473,7 +473,7 @@ pub async fn request_microphone_permission() -> Result<bool, String> {
 
         // Build an input stream - this triggers the permission dialog
         let stream = device.build_input_stream_raw(
-            &config.config(),
+            config.config(),
             config.sample_format(),
             move |_data: &cpal::Data, _: &cpal::InputCallbackInfo| {
                 // Do nothing
