@@ -150,17 +150,9 @@ fn handle_event(app_handle: &tauri::AppHandle, event_type: CGEventType, event: &
 
             update_held_key(keycode, is_pressed);
         }
-        CGEventType::KeyDown => {
-            // Non-modifier key pressed
-            if !config::is_modifier_keycode(keycode) {
-                update_held_key(keycode, true);
-            }
-        }
-        CGEventType::KeyUp => {
-            // Non-modifier key released
-            if !config::is_modifier_keycode(keycode) {
-                update_held_key(keycode, false);
-            }
+        // Non-modifier key pressed or released
+        CGEventType::KeyDown | CGEventType::KeyUp if !config::is_modifier_keycode(keycode) => {
+            update_held_key(keycode, matches!(event_type, CGEventType::KeyDown));
         }
         _ => {}
     }
