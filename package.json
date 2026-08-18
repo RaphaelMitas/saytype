@@ -9,11 +9,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "format": "prettier --check \"src/**/*.{ts,tsx,css}\" && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && ruff format --check sidecar/ tests/",
-    "format:fix": "prettier --write \"src/**/*.{ts,tsx,css}\" && cargo fmt --manifest-path src-tauri/Cargo.toml && ruff format sidecar/ tests/",
+    "check": "biome check src/",
+    "check:fix": "biome check --write src/",
     "typecheck": "tsc --noEmit && cargo check --manifest-path src-tauri/Cargo.toml && pyright",
-    "lint": "eslint src/ && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings && ruff check sidecar/ tests/",
-    "lint:fix": "ruff check --fix sidecar/ tests/",
     "test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "e2e:sidecar": "python3 tests/e2e/sidecar_e2e.py \"src-tauri/binaries/transcribe-server-$(rustc -vV | sed -n 's/^host: //p')\"",
     "e2e:app": "./tests/e2e/app_e2e.sh"
@@ -26,18 +24,13 @@
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@biomejs/biome": "^2.5.9",
     "@tauri-apps/cli": "^2.10.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.0",
-    "eslint": "^10.1.0",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.5.2",
-    "prettier": "^3.8.1",
     "pyright": "^1.1.408",
     "typescript": "~7.0.0",
-    "typescript-eslint": "^8.57.2",
     "vite": "^8.0.0"
   }
 }

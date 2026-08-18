@@ -28,11 +28,8 @@ jobs:
       - name: Type check (TypeScript)
         run: pnpm tsc --noEmit
 
-      - name: Format check (Prettier)
-        run: pnpm prettier --check "src/**/*.{ts,tsx,css}"
-
-      - name: Lint check (ESLint)
-        run: pnpm eslint src/
+      - name: Check (format + lint, Biome)
+        run: pnpm check
 
       - name: Build check (Vite)
         run: pnpm build

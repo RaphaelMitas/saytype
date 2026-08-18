@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
+import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useState } from "react";
 import {
-  useRecording,
   checkPermissions,
   openAccessibilitySettings,
   openInputMonitoringSettings,
+  useRecording,
 } from "../hooks/useRecording";
 
 interface HotkeyConfig {
@@ -341,6 +341,7 @@ export function Settings({ onClose }: SettingsProps) {
           <h2>Test</h2>
           <div className="button-group">
             <button
+              type="button"
               onClick={handleTestRecording}
               disabled={isRecording || state === "initializing"}
             >
@@ -350,7 +351,7 @@ export function Settings({ onClose }: SettingsProps) {
                   ? "Loading..."
                   : "Test Record (3s)"}
             </button>
-            <button onClick={handleTestSidecar} disabled={state === "initializing"}>
+            <button type="button" onClick={handleTestSidecar} disabled={state === "initializing"}>
               {state === "initializing" ? "Loading..." : "Test Sidecar"}
             </button>
           </div>
@@ -367,12 +368,12 @@ export function Settings({ onClose }: SettingsProps) {
                 <kbd className="listening">
                   {pendingKeys.length > 0 ? formatPendingKeys(pendingKeys) : "Press keys..."}
                 </kbd>
-                <button className="cancel-btn" onClick={cancelHotkeyListening}>
+                <button type="button" className="cancel-btn" onClick={cancelHotkeyListening}>
                   Cancel
                 </button>
               </div>
             ) : (
-              <button className="hotkey-btn" onClick={startListeningForHotkey}>
+              <button type="button" className="hotkey-btn" onClick={startListeningForHotkey}>
                 <kbd>{currentHotkey}</kbd>
                 <span className="edit-hint">Click to change</span>
               </button>
@@ -396,6 +397,7 @@ export function Settings({ onClose }: SettingsProps) {
               {(["local", "client_only", "server_only"] as const).map((mode) => (
                 <button
                   key={mode}
+                  type="button"
                   className={`mode-option ${networkMode === mode ? "active" : ""}`}
                   onClick={() => handleNetworkModeChange(mode)}
                 >
@@ -422,10 +424,10 @@ export function Settings({ onClose }: SettingsProps) {
                 />
               </div>
               <div className="button-group">
-                <button onClick={handleApplyServerUrl} disabled={!serverUrl}>
+                <button type="button" onClick={handleApplyServerUrl} disabled={!serverUrl}>
                   Apply
                 </button>
-                <button className="secondary" onClick={handleTestConnection}>
+                <button type="button" className="secondary" onClick={handleTestConnection}>
                   Test
                 </button>
               </div>
@@ -440,13 +442,14 @@ export function Settings({ onClose }: SettingsProps) {
                   id="server-port"
                   type="number"
                   value={serverPort}
-                  onChange={(e) => handleServerPortChange(parseInt(e.target.value) || 8765)}
+                  onChange={(e) => handleServerPortChange(parseInt(e.target.value, 10) || 8765)}
                   min={1}
                   max={65535}
                 />
               </div>
               {state !== "initializing" && localIp && (
                 <button
+                  type="button"
                   className="copy-url-btn"
                   onClick={() => {
                     navigator.clipboard.writeText(`http://${localIp}:${serverPort}`);
@@ -498,12 +501,18 @@ export function Settings({ onClose }: SettingsProps) {
             </>
           )}
           <div className="button-group">
-            <button onClick={handleRefreshPermissions}>Refresh</button>
+            <button type="button" onClick={handleRefreshPermissions}>
+              Refresh
+            </button>
             {platform !== "windows" && !permissions.accessibility && (
-              <button onClick={openAccessibilitySettings}>Accessibility Settings</button>
+              <button type="button" onClick={openAccessibilitySettings}>
+                Accessibility Settings
+              </button>
             )}
             {platform !== "windows" && !permissions.input_monitoring && (
-              <button onClick={openInputMonitoringSettings}>Input Monitoring Settings</button>
+              <button type="button" onClick={openInputMonitoringSettings}>
+                Input Monitoring Settings
+              </button>
             )}
           </div>
         </section>
@@ -532,7 +541,7 @@ export function Settings({ onClose }: SettingsProps) {
       </section>
 
       {onClose && (
-        <button className="close-button" onClick={onClose}>
+        <button type="button" className="close-button" onClick={onClose}>
           Close
         </button>
       )}
