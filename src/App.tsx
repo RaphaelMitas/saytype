@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Settings } from "./components/Settings";
+import { useEffect, useRef, useState } from "react";
 import { Onboarding } from "./components/Onboarding";
+import { Settings } from "./components/Settings";
 import { checkPermissions } from "./hooks/useRecording";
 import "./App.css";
 

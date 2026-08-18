@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useState } from "react";
 
 export type RecordingState = "initializing" | "idle" | "recording" | "processing";
 

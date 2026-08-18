@@ -387,13 +387,17 @@ button:disabled {
   font-size: 13px;
 }
 
-.skip-link a {
+.skip-link button {
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
   color: var(--text-secondary);
   text-decoration: underline;
   cursor: pointer;
 }
 
-.skip-link a:hover {
+.skip-link button:hover {
   color: var(--text-color);
 }
 

@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useState } from "react";
 import {
   checkPermissions,
-  requestMicrophonePermission,
   openAccessibilitySettings,
   openInputMonitoringSettings,
+  requestMicrophonePermission,
 } from "../hooks/useRecording";
 
 interface OnboardingProps {
@@ -103,7 +103,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <li>Speak your message</li>
               <li>Release to transcribe and insert</li>
             </ol>
-            <button onClick={() => setStep("microphone")}>Get Started</button>
+            <button type="button" onClick={() => setStep("microphone")}>
+              Get Started
+            </button>
           </div>
         );
 
@@ -115,23 +117,19 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             {micPermission ? (
               <>
                 <p className="success">✓ Microphone access granted</p>
-                <button onClick={() => setStep(nextStepAfterMic)}>Continue</button>
+                <button type="button" onClick={() => setStep(nextStepAfterMic)}>
+                  Continue
+                </button>
               </>
             ) : (
               <>
-                <button onClick={handleRequestMicrophone} disabled={checking}>
+                <button type="button" onClick={handleRequestMicrophone} disabled={checking}>
                   {checking ? "Checking..." : "Allow Microphone Access"}
                 </button>
                 <p className="skip-link">
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setStep(nextStepAfterMic);
-                    }}
-                  >
+                  <button type="button" onClick={() => setStep(nextStepAfterMic)}>
                     Skip this step
-                  </a>
+                  </button>
                 </p>
               </>
             )}
@@ -155,13 +153,17 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             {accessibilityPermission ? (
               <>
                 <p className="success">✓ Accessibility access granted</p>
-                <button onClick={() => setStep("input_monitoring")}>Continue</button>
+                <button type="button" onClick={() => setStep("input_monitoring")}>
+                  Continue
+                </button>
               </>
             ) : (
               <>
                 <div className="button-group">
-                  <button onClick={handleOpenAccessibility}>Open Settings</button>
-                  <button onClick={handleCheckAccessibility} disabled={checking}>
+                  <button type="button" onClick={handleOpenAccessibility}>
+                    Open Settings
+                  </button>
+                  <button type="button" onClick={handleCheckAccessibility} disabled={checking}>
                     {checking ? "Checking..." : "I've Done This"}
                   </button>
                 </div>
@@ -171,19 +173,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       <strong>Permission not detected.</strong> If you've already enabled it in
                       System Settings, the app needs to be restarted for the change to take effect.
                     </p>
-                    <button onClick={handleQuitApp}>Quit & Restart App</button>
+                    <button type="button" onClick={handleQuitApp}>
+                      Quit & Restart App
+                    </button>
                   </div>
                 )}
                 <p className="skip-link">
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setStep("input_monitoring");
-                    }}
-                  >
+                  <button type="button" onClick={() => setStep("input_monitoring")}>
                     Skip this step
-                  </a>
+                  </button>
                 </p>
               </>
             )}
@@ -206,13 +204,17 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             {inputMonitoringPermission ? (
               <>
                 <p className="success">✓ Input Monitoring access granted</p>
-                <button onClick={() => setStep("complete")}>Continue</button>
+                <button type="button" onClick={() => setStep("complete")}>
+                  Continue
+                </button>
               </>
             ) : (
               <>
                 <div className="button-group">
-                  <button onClick={handleOpenInputMonitoring}>Open Settings</button>
-                  <button onClick={handleCheckInputMonitoring} disabled={checking}>
+                  <button type="button" onClick={handleOpenInputMonitoring}>
+                    Open Settings
+                  </button>
+                  <button type="button" onClick={handleCheckInputMonitoring} disabled={checking}>
                     {checking ? "Checking..." : "I've Done This"}
                   </button>
                 </div>
@@ -222,19 +224,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       <strong>Permission not detected.</strong> If you've already enabled it in
                       System Settings, the app needs to be restarted for the change to take effect.
                     </p>
-                    <button onClick={handleQuitApp}>Quit & Restart App</button>
+                    <button type="button" onClick={handleQuitApp}>
+                      Quit & Restart App
+                    </button>
                   </div>
                 )}
                 <p className="skip-link">
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setStep("complete");
-                    }}
-                  >
+                  <button type="button" onClick={() => setStep("complete")}>
                     Skip this step
-                  </a>
+                  </button>
                 </p>
               </>
             )}
@@ -254,7 +252,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               {platform === "windows" ? "Right Alt" : "Right Command"}, speak, then release to
               transcribe.
             </p>
-            <button onClick={onComplete}>Done</button>
+            <button type="button" onClick={onComplete}>
+              Done
+            </button>
           </div>
         );
     }
