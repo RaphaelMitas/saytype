@@ -28,8 +28,8 @@ tokio = { version = "1", features = ["sync", "fs", "process", "macros", "rt"] }
 # Audio recording
 cpal = "0.18"
 hound = "3.5"
-rubato = "2.0"
-audioadapter-buffers = "3"
+rubato = "5"
+audioadapter-buffers = "5"
 
 # HTTP client for remote transcription
 reqwest = { version = "0.13", features = ["json"] }
