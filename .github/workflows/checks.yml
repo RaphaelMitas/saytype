@@ -46,7 +46,9 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      # apt mirrors occasionally hang and take the whole run past 45 minutes.
       - name: Install system dependencies
+        timeout-minutes: 10
         run: |
           sudo apt-get update
           sudo apt-get install -y \
