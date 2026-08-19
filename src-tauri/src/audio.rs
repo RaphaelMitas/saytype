@@ -186,6 +186,48 @@ impl PushToTalkRecorder {
     }
 }
 
+#[cfg(test)]
+mod resample_tests {
+    use super::*;
+
+    #[test]
+    fn sine_wave_survives_44100_to_16000() {
+        let src_rate = 44100u32;
+        let dst_rate = 16000u32;
+        let secs = 1.0;
+        let n = (src_rate as f32 * secs) as usize;
+        let f = 440.0;
+        let input: Vec<f32> = (0..n)
+            .map(|i| (2.0 * std::f32::consts::PI * f * i as f32 / src_rate as f32).sin())
+            .collect();
+
+        let out = resample_audio(&input, src_rate, dst_rate).unwrap();
+        let expected = (n as f32 * dst_rate as f32 / src_rate as f32) as usize;
+        assert!(
+            (out.len() as i32 - expected as i32).abs() <= 8,
+            "len {} vs expected {}",
+            out.len(),
+            expected
+        );
+
+        let (start, end) = (4096, out.len() - 4096);
+        let mut crossings = 0u32;
+        for w in out[start..end].windows(2) {
+            if (w[0] < 0.0 && w[1] >= 0.0) || (w[0] >= 0.0 && w[1] < 0.0) {
+                crossings += 1;
+            }
+        }
+        let window_secs = (end - start) as f32 / dst_rate as f32;
+        let est_freq = crossings as f32 / 2.0 / window_secs;
+        assert!(
+            (est_freq - f).abs() < 2.0,
+            "estimated freq {} vs expected {}",
+            est_freq,
+            f
+        );
+    }
+}
+
 /// Resample audio from source_rate to target_rate using rubato
 fn resample_audio(samples: &[f32], source_rate: u32, target_rate: u32) -> Result<Vec<f32>, String> {
     if source_rate == target_rate {
@@ -196,7 +238,6 @@ fn resample_audio(samples: &[f32], source_rate: u32, target_rate: u32) -> Result
         source_rate as usize,
         target_rate as usize,
         1024, // chunk_size
-        1,    // sub_chunks
         1,    // mono
         FixedSync::Both,
     )
