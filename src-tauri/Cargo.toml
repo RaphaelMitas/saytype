@@ -44,7 +44,7 @@ lazy_static = "1.5"
 libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-cocoa = "0.26"
+cocoa = "0.27"
 objc2 = "0.6"
 core-graphics = "0.25"
 core-foundation = "0.10"
