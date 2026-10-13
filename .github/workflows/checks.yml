@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
   frontend:
@@ -46,8 +45,7 @@ jobs:
         with:
           components: clippy, rustfmt
 
-      # Saved from main only: per-PR caches can't be read by other PRs and
-      # used to fill the 10 GB repo cache.
+      # PR caches can't be read by other PRs and only fill the 10 GB repo cache
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
@@ -68,8 +66,7 @@ jobs:
       - name: Run tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
-  # Windows ships a client build with every release; without this job a
-  # Windows compile error only surfaces there and blocks the macOS release.
+  # otherwise Windows only compiles in release, where a break blocks the macOS release
   rust-windows:
     name: Rust (Windows)
     runs-on: windows-latest
