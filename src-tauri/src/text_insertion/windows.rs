@@ -32,12 +32,16 @@ pub fn insert_text(app: &tauri::AppHandle, text: &str) -> Result<(), String> {
     let ours = unsafe { GetClipboardSequenceNumber() };
     thread::sleep(Duration::from_millis(100));
 
-    send_keys(&[
+    if let Err(e) = send_keys(&[
         (VK_CONTROL, false),
         (VK_V, false),
         (VK_V, true),
         (VK_CONTROL, true),
-    ])?;
+    ]) {
+        // Nothing was pasted: leave an ordinary copy for a manual Ctrl+V.
+        let _ = clipboard.set_text(text);
+        return Err(format!("{e}; transcript left on the clipboard"));
+    }
     thread::sleep(RESTORE_AFTER);
 
     if let Some(original) = original {
