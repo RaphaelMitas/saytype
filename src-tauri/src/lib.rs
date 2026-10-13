@@ -11,7 +11,7 @@ mod transcriber;
 mod tray;
 
 use std::sync::Arc;
-use tauri::{Emitter, Manager, WindowEvent};
+use tauri::{Emitter, WindowEvent};
 use tokio::sync::Mutex;
 
 pub use config::HotkeyConfig;
@@ -40,7 +40,7 @@ async fn get_sidecar_ready(state: tauri::State<'_, AppState>) -> Result<bool, St
 
 #[tauri::command]
 async fn check_permissions() -> Result<serde_json::Value, String> {
-    let mic_permission = audio::check_microphone_permission();
+    let mic_permission = audio::microphone_permission();
     let accessibility_permission = text_insertion::check_accessibility_permission();
     let input_monitoring_permission = text_insertion::check_input_monitoring_permission();
 
@@ -52,18 +52,13 @@ async fn check_permissions() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-async fn request_microphone_permission() -> Result<bool, String> {
+async fn request_microphone_permission() -> audio::MicPermission {
     audio::request_microphone_permission().await
 }
 
 #[tauri::command]
-async fn open_accessibility_settings() -> Result<(), String> {
-    text_insertion::open_accessibility_settings()
-}
-
-#[tauri::command]
-async fn open_input_monitoring_settings() -> Result<(), String> {
-    text_insertion::open_input_monitoring_settings()
+async fn open_privacy_settings(pane: text_insertion::PrivacyPane) -> Result<(), String> {
+    text_insertion::open_privacy_settings(pane)
 }
 
 #[tauri::command]
@@ -341,10 +336,7 @@ pub fn run() {
 
             // Open settings window on launch
             if !is_e2e {
-                if let Some(window) = app.get_webview_window("settings") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                tray::show_settings(&app_handle);
             }
 
             if !is_server_only && !is_e2e {
@@ -352,7 +344,7 @@ pub fn run() {
                 #[cfg(target_os = "macos")]
                 if !text_insertion::check_accessibility_permission() {
                     println!("[HOTKEY] Accessibility permission not granted. Hotkey listener will not work.");
-                    let _ = app_handle.emit("accessibility-required", ());
+                    let _ = app_handle.emit("permission-required", ());
                 }
 
                 // Disable App Nap to ensure event delivery when backgrounded (macOS only)
@@ -406,8 +398,7 @@ pub fn run() {
             get_sidecar_ready,
             check_permissions,
             request_microphone_permission,
-            open_accessibility_settings,
-            open_input_monitoring_settings,
+            open_privacy_settings,
             test_start_recording,
             test_stop_and_transcribe,
             test_sidecar,
