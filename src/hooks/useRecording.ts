@@ -86,8 +86,8 @@ export async function requestMicrophonePermission(): Promise<MicPermission> {
   return await invoke("request_microphone_permission");
 }
 
-export async function openPrivacySettings(
-  pane: "microphone" | "accessibility" | "input_monitoring",
-): Promise<void> {
+export type PrivacyPane = "microphone" | "accessibility" | "input_monitoring";
+
+export async function openPrivacySettings(pane: PrivacyPane): Promise<void> {
   return await invoke("open_privacy_settings", { pane });
 }

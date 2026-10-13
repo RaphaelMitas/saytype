@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 import {
   checkPermissions,
+  type MicPermission,
   openPrivacySettings,
   type Permissions,
   useRecording,
@@ -11,6 +12,13 @@ import {
 interface HotkeyConfig {
   label: string;
 }
+
+const MIC_LABELS: Record<MicPermission, string> = {
+  granted: "✓ Granted",
+  denied: "✗ Denied",
+  undetermined: "✗ Not requested",
+  blocked: "✗ Blocked",
+};
 
 interface SettingsProps {
   onClose?: () => void;
@@ -480,7 +488,7 @@ export function Settings({ onClose }: SettingsProps) {
           <div className="permission-item">
             <span>Microphone</span>
             <span className={permissions.microphone === "granted" ? "granted" : "denied"}>
-              {permissions.microphone === "granted" ? "✓ Granted" : "✗ Denied"}
+              {MIC_LABELS[permissions.microphone]}
             </span>
           </div>
           {platform !== "windows" && (

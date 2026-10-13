@@ -312,23 +312,16 @@ pub enum MicPermission {
     Blocked,
 }
 
-#[cfg(target_os = "macos")]
-fn av_audio_status() -> objc2_av_foundation::AVAuthorizationStatus {
-    use objc2_av_foundation::{AVAuthorizationStatus, AVCaptureDevice, AVMediaTypeAudio};
-    match unsafe { AVMediaTypeAudio } {
-        Some(audio) => unsafe { AVCaptureDevice::authorizationStatusForMediaType(audio) },
-        None => AVAuthorizationStatus::NotDetermined,
-    }
-}
-
 pub fn microphone_permission() -> MicPermission {
     #[cfg(target_os = "macos")]
     {
-        use objc2_av_foundation::AVAuthorizationStatus;
-        match av_audio_status() {
-            AVAuthorizationStatus::Authorized => MicPermission::Granted,
-            AVAuthorizationStatus::NotDetermined => MicPermission::Undetermined,
-            _ => MicPermission::Denied,
+        use objc2_av_foundation::{AVAuthorizationStatus, AVCaptureDevice};
+        let status = audio_media_type()
+            .map(|audio| unsafe { AVCaptureDevice::authorizationStatusForMediaType(audio) });
+        match status {
+            Some(AVAuthorizationStatus::Authorized) => MicPermission::Granted,
+            Some(AVAuthorizationStatus::NotDetermined) | None => MicPermission::Undetermined,
+            Some(_) => MicPermission::Denied,
         }
     }
     #[cfg(not(target_os = "macos"))]
@@ -340,37 +333,36 @@ pub fn microphone_permission() -> MicPermission {
 pub async fn request_microphone_permission() -> MicPermission {
     #[cfg(target_os = "macos")]
     {
-        use objc2::runtime::Bool;
-        use objc2_av_foundation::{AVAuthorizationStatus, AVCaptureDevice, AVMediaTypeAudio};
-
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        {
-            let Some(audio) = (unsafe { AVMediaTypeAudio }) else {
-                return MicPermission::Denied;
-            };
-            let tx = StdMutex::new(Some(tx));
-            let handler = block2::RcBlock::new(move |granted: Bool| {
-                if let Some(tx) = tx.lock().ok().and_then(|mut tx| tx.take()) {
-                    let _ = tx.send(granted.as_bool());
-                }
-            });
-            unsafe {
-                AVCaptureDevice::requestAccessForMediaType_completionHandler(audio, &handler)
-            };
-        }
-        match rx.await {
-            Ok(true) => MicPermission::Granted,
-            // A refused prompt records Denied; a launcher that can't prompt records nothing.
-            _ if av_audio_status() == AVAuthorizationStatus::NotDetermined => {
-                MicPermission::Blocked
-            }
-            _ => MicPermission::Denied,
+        let _ = ask_for_microphone().recv().await;
+        // A refused prompt records Denied; a launcher that can't prompt records nothing.
+        match microphone_permission() {
+            MicPermission::Undetermined => MicPermission::Blocked,
+            permission => permission,
         }
     }
     #[cfg(not(target_os = "macos"))]
     {
         MicPermission::Granted
     }
+}
+
+#[cfg(target_os = "macos")]
+fn audio_media_type() -> Option<&'static objc2_av_foundation::AVMediaType> {
+    unsafe { objc2_av_foundation::AVMediaTypeAudio }
+}
+
+/// Returns a receiver instead of awaiting, so the non-Send block is gone before the await.
+#[cfg(target_os = "macos")]
+fn ask_for_microphone() -> tokio::sync::mpsc::UnboundedReceiver<()> {
+    use objc2_av_foundation::AVCaptureDevice;
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    if let Some(audio) = audio_media_type() {
+        let answered = block2::RcBlock::new(move |_: objc2::runtime::Bool| {
+            let _ = tx.send(());
+        });
+        unsafe { AVCaptureDevice::requestAccessForMediaType_completionHandler(audio, &answered) };
+    }
+    rx
 }
 
 /// Play a sound when recording starts

@@ -256,12 +256,14 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
     };
 
     tauri::async_runtime::spawn(async move {
-        if let Some(state) = handle.try_state::<AppState>() {
-            let mut is_recording = state.is_recording.lock().await;
-            *is_recording = false;
+        let was_recording = match handle.try_state::<AppState>() {
+            Some(state) => std::mem::replace(&mut *state.is_recording.lock().await, false),
+            None => true,
+        };
+        // A refused press never started recording; its busy sound already played.
+        if was_recording {
+            audio::play_stop_sound();
         }
-
-        audio::play_stop_sound();
 
         println!("[DEBUG] Stopping recording...");
         let audio_path = match audio::stop_recording() {
