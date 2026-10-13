@@ -18,7 +18,7 @@ use objc2_foundation::{NSArray, NSData, NSString};
 const ANSI_V_KEYCODE: u16 = 9;
 const LEFT_COMMAND_KEYCODE: u16 = 55;
 const KEY_HOLD: Duration = Duration::from_millis(15);
-// a busy Chrome page read CGEvent ⌘V within 173 ms
+// slowest measured read after ⌘V: 173 ms on a busy Chrome page
 const RESTORE_AFTER: Duration = Duration::from_secs(1);
 const MAX_RESTORE_BYTES: usize = 32 << 20;
 // nspasteboard.org markers: clipboard managers skip items carrying them.
@@ -37,7 +37,7 @@ pub fn insert_text(app: &tauri::AppHandle, text: &str) -> Result<(), String> {
     let _serialized = PASTE.lock().unwrap_or_else(|e| e.into_inner());
     let pasteboard = NSPasteboard::generalPasteboard();
 
-    // Without Accessibility, CGEventPost drops events silently; keep the transcript for a manual ⌘V.
+    // CGEventPost drops events silently without Accessibility
     if !super::check_accessibility_permission() {
         write_transcript(&pasteboard, text);
         return Err("Accessibility permission missing; transcript left on the clipboard".into());
@@ -48,10 +48,8 @@ pub fn insert_text(app: &tauri::AppHandle, text: &str) -> Result<(), String> {
 
     write_transcript(&pasteboard, text);
     let ours = pasteboard.changeCount();
-    let pasted = post_command_v(v_keycode);
-    if pasted.is_ok() {
-        thread::sleep(RESTORE_AFTER);
-    }
+    post_command_v(v_keycode)?;
+    thread::sleep(RESTORE_AFTER);
 
     if let Some(snapshot) = snapshot {
         if pasteboard.changeCount() == ours {
@@ -59,10 +57,10 @@ pub fn insert_text(app: &tauri::AppHandle, text: &str) -> Result<(), String> {
             write_items(&pasteboard, &restore_items(snapshot));
         }
     }
-    pasted
+    Ok(())
 }
 
-/// None when none of a non-empty clipboard could be kept; the transcript then stays.
+/// None if the clipboard had items but none fit the budget, so the transcript stays.
 fn snapshot(pasteboard: &NSPasteboard) -> Option<Snapshot> {
     let originals = pasteboard.pasteboardItems().unwrap_or_default();
     let mut bytes = 0;

@@ -32,22 +32,20 @@ pub fn insert_text(app: &tauri::AppHandle, text: &str) -> Result<(), String> {
     let ours = unsafe { GetClipboardSequenceNumber() };
     thread::sleep(Duration::from_millis(100));
 
-    let pasted = send_keys(&[
+    send_keys(&[
         (VK_CONTROL, false),
         (VK_V, false),
         (VK_V, true),
         (VK_CONTROL, true),
-    ]);
-    if pasted.is_ok() {
-        thread::sleep(RESTORE_AFTER);
-    }
+    ])?;
+    thread::sleep(RESTORE_AFTER);
 
     if let Some(original) = original {
         if unsafe { GetClipboardSequenceNumber() } == ours {
-            let _ = clipboard.set_text(original);
+            let _ = clipboard.set().exclude_from_monitoring().text(original);
         }
     }
-    pasted
+    Ok(())
 }
 
 /// The hotkey's modifiers can still read as held right after release.
