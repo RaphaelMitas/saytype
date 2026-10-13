@@ -18,7 +18,7 @@ use objc2_foundation::{NSArray, NSData, NSString};
 const ANSI_V_KEYCODE: u16 = 9;
 const LEFT_COMMAND_KEYCODE: u16 = 55;
 const KEY_HOLD: Duration = Duration::from_millis(15);
-// CGEvent ⌘V was read within 173 ms even by a busy Chrome page; 1 s leaves margin.
+// a busy Chrome page read CGEvent ⌘V within 173 ms
 const RESTORE_AFTER: Duration = Duration::from_secs(1);
 const MAX_RESTORE_BYTES: usize = 32 << 20;
 // nspasteboard.org markers: clipboard managers skip items carrying them.
@@ -32,34 +32,42 @@ static PASTE: Mutex<()> = Mutex::new(());
 
 type Snapshot = Vec<Vec<(Retained<NSString>, Retained<NSData>)>>;
 
-/// Blocks ~1 s while it restores the clipboard; never call on the main thread.
+/// Waits ~1 s before restoring the clipboard; never call on the main thread.
 pub fn insert_text(app: &tauri::AppHandle, text: &str) -> Result<(), String> {
     let _serialized = PASTE.lock().unwrap_or_else(|e| e.into_inner());
+    let pasteboard = NSPasteboard::generalPasteboard();
+
+    // Without Accessibility, CGEventPost drops events silently; keep the transcript for a manual ⌘V.
+    if !super::check_accessibility_permission() {
+        write_transcript(&pasteboard, text);
+        return Err("Accessibility permission missing; transcript left on the clipboard".into());
+    }
 
     let v_keycode = command_v_keycode(app);
-    let pasteboard = NSPasteboard::generalPasteboard();
     let snapshot = snapshot(&pasteboard);
 
-    pasteboard.prepareForNewContentsWithOptions(NSPasteboardContentsOptions::CurrentHostOnly);
-    write_items(&pasteboard, &[transcript_item(text)]);
+    write_transcript(&pasteboard, text);
     let ours = pasteboard.changeCount();
     let pasted = post_command_v(v_keycode);
     if pasted.is_ok() {
         thread::sleep(RESTORE_AFTER);
     }
 
-    if pasteboard.changeCount() == ours {
-        pasteboard.clearContents();
-        write_items(&pasteboard, &restore_items(snapshot));
+    if let Some(snapshot) = snapshot {
+        if pasteboard.changeCount() == ours {
+            pasteboard.clearContents();
+            write_items(&pasteboard, &restore_items(snapshot));
+        }
     }
     pasted
 }
 
-// Types past the cap are dropped so a huge copy still keeps its text.
-fn snapshot(pasteboard: &NSPasteboard) -> Snapshot {
+/// None when none of a non-empty clipboard could be kept; the transcript then stays.
+fn snapshot(pasteboard: &NSPasteboard) -> Option<Snapshot> {
+    let originals = pasteboard.pasteboardItems().unwrap_or_default();
     let mut bytes = 0;
     let mut items = Vec::new();
-    for item in pasteboard.pasteboardItems().unwrap_or_default().iter() {
+    for item in originals.iter() {
         let mut entries = Vec::new();
         for kind in item.types().iter() {
             if is_file_promise(&kind) {
@@ -68,6 +76,7 @@ fn snapshot(pasteboard: &NSPasteboard) -> Snapshot {
             let Some(data) = item.dataForType(&kind) else {
                 continue;
             };
+            // Dropping only this type lets a huge copy still keep its text.
             if bytes + data.length() > MAX_RESTORE_BYTES {
                 continue;
             }
@@ -78,7 +87,7 @@ fn snapshot(pasteboard: &NSPasteboard) -> Snapshot {
             items.push(entries);
         }
     }
-    items
+    (!items.is_empty() || originals.is_empty()).then_some(items)
 }
 
 // Promised files are produced by the source app on demand and can't be written back.
@@ -86,6 +95,11 @@ fn is_file_promise(kind: &NSString) -> bool {
     let kind = kind.to_string();
     kind.starts_with("com.apple.pasteboard.promised-")
         || kind == "com.apple.NSFilePromiseItemMetaData"
+}
+
+fn write_transcript(pasteboard: &NSPasteboard, text: &str) {
+    pasteboard.prepareForNewContentsWithOptions(NSPasteboardContentsOptions::CurrentHostOnly);
+    write_items(pasteboard, &[transcript_item(text)]);
 }
 
 fn transcript_item(text: &str) -> Retained<NSPasteboardItem> {
@@ -147,8 +161,7 @@ fn post_command_v(v_keycode: u16) -> Result<(), String> {
     Ok(())
 }
 
-/// The key that types `v` with ⌘ held in the current layout (on Dvorak, keycode 9 is ".").
-/// The layout APIs only work on the main thread.
+// Dvorak types "." on keycode 9, and the TIS layout APIs only work on the main thread.
 fn command_v_keycode(app: &tauri::AppHandle) -> u16 {
     let (tx, rx) = mpsc::sync_channel(1);
     if app

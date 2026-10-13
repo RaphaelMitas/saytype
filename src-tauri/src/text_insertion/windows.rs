@@ -14,7 +14,7 @@ const RESTORE_AFTER: Duration = Duration::from_secs(1);
 
 static PASTE: Mutex<()> = Mutex::new(());
 
-/// Blocks ~1 s while it restores the clipboard; never call on the main thread.
+/// Waits ~1 s before restoring the clipboard; never call on the main thread.
 pub fn insert_text(app: &tauri::AppHandle, text: &str) -> Result<(), String> {
     let _serialized = PASTE.lock().unwrap_or_else(|e| e.into_inner());
 
