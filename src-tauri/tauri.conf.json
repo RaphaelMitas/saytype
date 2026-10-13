@@ -54,10 +54,5 @@
         "type": "downloadBootstrapper"
       }
     }
-  },
-  "plugins": {
-    "shell": {
-      "open": true
-    }
   }
 }

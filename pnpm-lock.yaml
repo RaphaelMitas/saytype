@@ -169,12 +169,6 @@ importers:
       '@tauri-apps/api':
         specifier: ^2.10.1
         version: 2.11.1
-      '@tauri-apps/plugin-opener':
-        specifier: ^2.5.3
-        version: 2.5.5
-      '@tauri-apps/plugin-shell':
-        specifier: ^2.3.5
-        version: 2.3.6
       react:
         specifier: ^19.2.4
         version: 19.3.0
@@ -446,12 +440,6 @@ packages:
     resolution: {integrity: sha512-YbeJ6tctNoo40purO4u3Eeo3RVqmsjJr0NoKQRu+4pvO4gMLzkjta7x0k96SxSLmx+rQ+8um1ThOlw+HLpgFug==}
     engines: {node: '>= 10'}
     hasBin: true
-
-  '@tauri-apps/plugin-opener@2.5.5':
-    resolution: {integrity: sha512-xvzGai5aQds8j8R8RsUK/lW6pGG50YgOYIPLzvkqmkwAj7dfySOD7sGtejRzvVdMmv1EQfKVEFh1MvmDp8QR0g==}
-
-  '@tauri-apps/plugin-shell@2.3.6':
-    resolution: {integrity: sha512-C2AG+QmBJPK0E3gccLXfRdjTfGBC9DgwzGi/PfYa61ieAZbYvhvOss4OdSGfn/D28N3THGhJZEhf3lozOh/Uqw==}
 
   '@types/react-dom@19.3.0':
     resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
@@ -924,14 +912,6 @@ snapshots:
       '@tauri-apps/cli-win32-arm64-msvc': 2.11.5
       '@tauri-apps/cli-win32-ia32-msvc': 2.11.5
       '@tauri-apps/cli-win32-x64-msvc': 2.11.5
-
-  '@tauri-apps/plugin-opener@2.5.5':
-    dependencies:
-      '@tauri-apps/api': 2.11.1
-
-  '@tauri-apps/plugin-shell@2.3.6':
-    dependencies:
-      '@tauri-apps/api': 2.11.1
 
   '@types/react-dom@19.3.0(@types/react@19.3.0)':
     dependencies:

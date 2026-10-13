@@ -23,7 +23,6 @@ export function Settings({ onClose }: SettingsProps) {
     accessibility: false,
     input_monitoring: false,
   });
-  const [startAtLogin, setStartAtLogin] = useState(false);
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [currentHotkey, setCurrentHotkey] = useState<string>("Right \u2318");
@@ -517,18 +516,6 @@ export function Settings({ onClose }: SettingsProps) {
           </div>
         </section>
       )}
-
-      <section className="options-section">
-        <h2>Options</h2>
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={startAtLogin}
-            onChange={(e) => setStartAtLogin(e.target.checked)}
-          />
-          Start at login
-        </label>
-      </section>
 
       <section className="about-section">
         <h2>About</h2>

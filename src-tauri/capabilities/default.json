@@ -3,12 +3,5 @@
   "identifier": "default",
   "description": "Capability for the settings window",
   "windows": ["settings"],
-  "permissions": [
-    "core:default",
-    "opener:default",
-    "shell:default",
-    "shell:allow-spawn",
-    "shell:allow-execute",
-    "shell:allow-kill"
-  ]
+  "permissions": ["core:default"]
 }

@@ -33,12 +33,6 @@ impl AppState {
 }
 
 #[tauri::command]
-async fn get_recording_state(state: tauri::State<'_, AppState>) -> Result<bool, String> {
-    let is_recording = state.is_recording.lock().await;
-    Ok(*is_recording)
-}
-
-#[tauri::command]
 async fn get_sidecar_ready(state: tauri::State<'_, AppState>) -> Result<bool, String> {
     let sidecar_ready = state.sidecar_ready.lock().await;
     Ok(*sidecar_ready)
@@ -70,14 +64,6 @@ async fn open_accessibility_settings() -> Result<(), String> {
 #[tauri::command]
 async fn open_input_monitoring_settings() -> Result<(), String> {
     text_insertion::open_input_monitoring_settings()
-}
-
-#[tauri::command]
-async fn transcribe_audio(
-    audio_path: String,
-    app_handle: tauri::AppHandle,
-) -> Result<String, String> {
-    transcriber::transcribe(&app_handle, &audio_path).await
 }
 
 #[tauri::command]
@@ -330,8 +316,6 @@ pub fn run() {
     let app_state = AppState::new(app_config.hotkey);
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_shell::init())
         .manage(app_state)
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -419,13 +403,11 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            get_recording_state,
             get_sidecar_ready,
             check_permissions,
             request_microphone_permission,
             open_accessibility_settings,
             open_input_monitoring_settings,
-            transcribe_audio,
             test_start_recording,
             test_stop_and_transcribe,
             test_sidecar,
