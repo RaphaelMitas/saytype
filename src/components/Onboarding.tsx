@@ -15,14 +15,19 @@ type Step = "welcome" | "microphone" | "accessibility" | "input_monitoring" | "c
 
 export function Onboarding({ onComplete }: OnboardingProps) {
   const [step, setStep] = useState<Step>("welcome");
+  const [checkFailed, setCheckFailed] = useState(false);
   const [permissions, setPermissions] = useState<Permissions>({
     microphone: "undetermined",
     accessibility: false,
     input_monitoring: false,
   });
   const [checking, setChecking] = useState(false);
-  const [checkFailed, setCheckFailed] = useState(false);
   const [platform, setPlatform] = useState<string>("macos");
+
+  const goTo = (next: Step) => {
+    setCheckFailed(false);
+    setStep(next);
+  };
 
   useEffect(() => {
     checkPermissions().then(setPermissions);
@@ -39,7 +44,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setPermissions((perms) => ({ ...perms, microphone }));
     setChecking(false);
     if (microphone === "granted") {
-      setStep(nextStepAfterMic);
+      goTo(nextStepAfterMic);
     }
   };
 
@@ -50,7 +55,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setPermissions(perms);
     setChecking(false);
     if (isGranted(perms)) {
-      setStep(next);
+      goTo(next);
     } else {
       setCheckFailed(true);
     }
@@ -79,7 +84,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <li>Speak your message</li>
               <li>Release to transcribe and insert</li>
             </ol>
-            <button type="button" onClick={() => setStep("microphone")}>
+            <button type="button" onClick={() => goTo("microphone")}>
               Get Started
             </button>
           </div>
@@ -93,7 +98,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             {permissions.microphone === "granted" ? (
               <>
                 <p className="success">✓ Microphone access granted</p>
-                <button type="button" onClick={() => setStep(nextStepAfterMic)}>
+                <button type="button" onClick={() => goTo(nextStepAfterMic)}>
                   Continue
                 </button>
               </>
@@ -136,7 +141,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </div>
                 )}
                 <p className="skip-link">
-                  <button type="button" onClick={() => setStep(nextStepAfterMic)}>
+                  <button type="button" onClick={() => goTo(nextStepAfterMic)}>
                     Skip this step
                   </button>
                 </p>
@@ -162,7 +167,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             {permissions.accessibility ? (
               <>
                 <p className="success">✓ Accessibility access granted</p>
-                <button type="button" onClick={() => setStep("input_monitoring")}>
+                <button type="button" onClick={() => goTo("input_monitoring")}>
                   Continue
                 </button>
               </>
@@ -192,7 +197,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </div>
                 )}
                 <p className="skip-link">
-                  <button type="button" onClick={() => setStep("input_monitoring")}>
+                  <button type="button" onClick={() => goTo("input_monitoring")}>
                     Skip this step
                   </button>
                 </p>
@@ -217,7 +222,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             {permissions.input_monitoring ? (
               <>
                 <p className="success">✓ Input Monitoring access granted</p>
-                <button type="button" onClick={() => setStep("complete")}>
+                <button type="button" onClick={() => goTo("complete")}>
                   Continue
                 </button>
               </>
@@ -247,7 +252,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </div>
                 )}
                 <p className="skip-link">
-                  <button type="button" onClick={() => setStep("complete")}>
+                  <button type="button" onClick={() => goTo("complete")}>
                     Skip this step
                   </button>
                 </p>

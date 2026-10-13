@@ -64,6 +64,9 @@ async fn open_privacy_settings(pane: text_insertion::PrivacyPane) -> Result<(), 
 #[tauri::command]
 async fn test_start_recording() -> Result<(), String> {
     println!("[TEST] Starting recording...");
+    if audio::microphone_permission() != audio::MicPermission::Granted {
+        return Err("Microphone access is off".to_string());
+    }
     audio::start_recording()
 }
 
