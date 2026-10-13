@@ -2,8 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import {
   checkPermissions,
-  openAccessibilitySettings,
-  openInputMonitoringSettings,
+  type MicPermission,
+  openPrivacySettings,
   requestMicrophonePermission,
 } from "../hooks/useRecording";
 
@@ -15,7 +15,7 @@ type Step = "welcome" | "microphone" | "accessibility" | "input_monitoring" | "c
 
 export function Onboarding({ onComplete }: OnboardingProps) {
   const [step, setStep] = useState<Step>("welcome");
-  const [micPermission, setMicPermission] = useState(false);
+  const [micPermission, setMicPermission] = useState<MicPermission>("undetermined");
   const [accessibilityPermission, setAccessibilityPermission] = useState(false);
   const [inputMonitoringPermission, setInputMonitoringPermission] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -38,16 +38,20 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
   const handleRequestMicrophone = async () => {
     setChecking(true);
-    const granted = await requestMicrophonePermission();
-    setMicPermission(granted);
+    const permission = await requestMicrophonePermission();
+    setMicPermission(permission);
     setChecking(false);
-    if (granted) {
+    if (permission === "granted") {
       setStep(nextStepAfterMic);
     }
   };
 
-  const handleOpenAccessibility = async () => {
-    await openAccessibilitySettings();
+  const handleCheckMicrophone = async () => {
+    const perms = await checkPermissions();
+    setMicPermission(perms.microphone);
+    if (perms.microphone === "granted") {
+      setStep(nextStepAfterMic);
+    }
   };
 
   const handleCheckAccessibility = async () => {
@@ -61,10 +65,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     } else {
       setCheckFailed(true);
     }
-  };
-
-  const handleOpenInputMonitoring = async () => {
-    await openInputMonitoringSettings();
   };
 
   const handleCheckInputMonitoring = async () => {
@@ -114,7 +114,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <div className="onboarding-step">
             <h2>Microphone Access</h2>
             <p>Saytype needs access to your microphone to capture your speech.</p>
-            {micPermission ? (
+            {micPermission === "granted" ? (
               <>
                 <p className="success">✓ Microphone access granted</p>
                 <button type="button" onClick={() => setStep(nextStepAfterMic)}>
@@ -123,9 +123,33 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               </>
             ) : (
               <>
-                <button type="button" onClick={handleRequestMicrophone} disabled={checking}>
-                  {checking ? "Checking..." : "Allow Microphone Access"}
-                </button>
+                {micPermission === "undetermined" && (
+                  <button type="button" onClick={handleRequestMicrophone} disabled={checking}>
+                    {checking ? "Checking..." : "Allow Microphone Access"}
+                  </button>
+                )}
+                {micPermission === "denied" && (
+                  <>
+                    <p>Microphone access is turned off for Saytype.</p>
+                    <div className="button-group">
+                      <button type="button" onClick={() => openPrivacySettings("microphone")}>
+                        Open Settings
+                      </button>
+                      <button type="button" onClick={handleCheckMicrophone}>
+                        I've Done This
+                      </button>
+                    </div>
+                  </>
+                )}
+                {micPermission === "blocked" && (
+                  <div className="warning">
+                    <p>
+                      <strong>macOS won't let Saytype ask.</strong> It asks the app that launched
+                      Saytype, and that app can't grant microphone access. Start Saytype from
+                      Terminal, iTerm or Ghostty and allow access there.
+                    </p>
+                  </div>
+                )}
                 <p className="skip-link">
                   <button type="button" onClick={() => setStep(nextStepAfterMic)}>
                     Skip this step
@@ -160,7 +184,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             ) : (
               <>
                 <div className="button-group">
-                  <button type="button" onClick={handleOpenAccessibility}>
+                  <button type="button" onClick={() => openPrivacySettings("accessibility")}>
                     Open Settings
                   </button>
                   <button type="button" onClick={handleCheckAccessibility} disabled={checking}>
@@ -211,7 +235,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             ) : (
               <>
                 <div className="button-group">
-                  <button type="button" onClick={handleOpenInputMonitoring}>
+                  <button type="button" onClick={() => openPrivacySettings("input_monitoring")}>
                     Open Settings
                   </button>
                   <button type="button" onClick={handleCheckInputMonitoring} disabled={checking}>

@@ -208,6 +208,14 @@ fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
     println!("[DEBUG] Hotkey pressed - starting recording");
     let handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
+        // Without access macOS records silence instead of failing.
+        if audio::microphone_permission() != audio::MicPermission::Granted {
+            audio::play_busy_sound();
+            crate::tray::show_settings(&handle);
+            let _ = handle.emit("permission-required", ());
+            return;
+        }
+
         // Check if sidecar is ready before allowing recording
         if let Some(state) = handle.try_state::<AppState>() {
             let sidecar_ready = state.sidecar_ready.lock().await;

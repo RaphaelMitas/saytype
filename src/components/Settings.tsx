@@ -3,8 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 import {
   checkPermissions,
-  openAccessibilitySettings,
-  openInputMonitoringSettings,
+  openPrivacySettings,
+  type Permissions,
   useRecording,
 } from "../hooks/useRecording";
 
@@ -18,8 +18,8 @@ interface SettingsProps {
 
 export function Settings({ onClose }: SettingsProps) {
   const { state, lastTranscription, lastError } = useRecording();
-  const [permissions, setPermissions] = useState({
-    microphone: false,
+  const [permissions, setPermissions] = useState<Permissions>({
+    microphone: "undetermined",
     accessibility: false,
     input_monitoring: false,
   });
@@ -479,8 +479,8 @@ export function Settings({ onClose }: SettingsProps) {
           <h2>Permissions</h2>
           <div className="permission-item">
             <span>Microphone</span>
-            <span className={permissions.microphone ? "granted" : "denied"}>
-              {permissions.microphone ? "✓ Granted" : "✗ Denied"}
+            <span className={permissions.microphone === "granted" ? "granted" : "denied"}>
+              {permissions.microphone === "granted" ? "✓ Granted" : "✗ Denied"}
             </span>
           </div>
           {platform !== "windows" && (
@@ -503,13 +503,18 @@ export function Settings({ onClose }: SettingsProps) {
             <button type="button" onClick={handleRefreshPermissions}>
               Refresh
             </button>
+            {platform !== "windows" && permissions.microphone === "denied" && (
+              <button type="button" onClick={() => openPrivacySettings("microphone")}>
+                Microphone Settings
+              </button>
+            )}
             {platform !== "windows" && !permissions.accessibility && (
-              <button type="button" onClick={openAccessibilitySettings}>
+              <button type="button" onClick={() => openPrivacySettings("accessibility")}>
                 Accessibility Settings
               </button>
             )}
             {platform !== "windows" && !permissions.input_monitoring && (
-              <button type="button" onClick={openInputMonitoringSettings}>
+              <button type="button" onClick={() => openPrivacySettings("input_monitoring")}>
                 Input Monitoring Settings
               </button>
             )}

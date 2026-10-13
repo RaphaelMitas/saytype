@@ -301,127 +301,75 @@ pub fn stop_recording() -> Result<String, String> {
     recorder.stop()
 }
 
-/// Check if microphone permission is granted using AVFoundation API
-pub fn check_microphone_permission() -> bool {
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub enum MicPermission {
+    Granted,
+    Denied,
+    Undetermined,
+    /// The app that launched Saytype can't grant microphone access, e.g. an editor's terminal.
+    Blocked,
+}
+
+#[cfg(target_os = "macos")]
+fn av_audio_status() -> objc2_av_foundation::AVAuthorizationStatus {
+    use objc2_av_foundation::{AVAuthorizationStatus, AVCaptureDevice, AVMediaTypeAudio};
+    match unsafe { AVMediaTypeAudio } {
+        Some(audio) => unsafe { AVCaptureDevice::authorizationStatusForMediaType(audio) },
+        None => AVAuthorizationStatus::NotDetermined,
+    }
+}
+
+pub fn microphone_permission() -> MicPermission {
     #[cfg(target_os = "macos")]
     {
-        // Try AVFoundation API first
-        let status = get_av_authorization_status();
-        eprintln!(
-            "check_microphone_permission: AVAuthorizationStatus = {}",
-            status
-        );
-
-        // If AVFoundation works and returns authorized, we're good
-        if status == 3 {
-            return true;
+        use objc2_av_foundation::AVAuthorizationStatus;
+        match av_audio_status() {
+            AVAuthorizationStatus::Authorized => MicPermission::Granted,
+            AVAuthorizationStatus::NotDetermined => MicPermission::Undetermined,
+            _ => MicPermission::Denied,
         }
-
-        // If status is 1 (restricted) or 2 (denied), we know permission is not granted
-        if status == 1 || status == 2 {
-            return false;
-        }
-
-        // If status is 0 (not determined) or AVFoundation failed,
-        // fall back to trying to actually use the microphone
-        check_microphone_by_recording()
     }
     #[cfg(not(target_os = "macos"))]
     {
-        true
+        MicPermission::Granted
     }
 }
 
-/// Fallback: check microphone permission by trying to record
-#[cfg(target_os = "macos")]
-fn check_microphone_by_recording() -> bool {
-    eprintln!("check_microphone_by_recording: trying to access microphone");
+pub async fn request_microphone_permission() -> MicPermission {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::runtime::Bool;
+        use objc2_av_foundation::{AVAuthorizationStatus, AVCaptureDevice, AVMediaTypeAudio};
 
-    let host = cpal::default_host();
-    let device = match host.default_input_device() {
-        Some(d) => d,
-        None => {
-            eprintln!("check_microphone_by_recording: no input device");
-            return false;
-        }
-    };
-
-    let config = match device.default_input_config() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("check_microphone_by_recording: config error: {}", e);
-            return false;
-        }
-    };
-
-    // Try to build and start a stream
-    let stream = device.build_input_stream_raw(
-        config.config(),
-        config.sample_format(),
-        move |_data: &cpal::Data, _: &cpal::InputCallbackInfo| {},
-        move |_err| {},
-        None,
-    );
-
-    match stream {
-        Ok(s) => {
-            match s.play() {
-                Ok(_) => {
-                    // Successfully started recording - permission granted
-                    eprintln!("check_microphone_by_recording: stream started successfully");
-                    drop(s);
-                    true
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        {
+            let Some(audio) = (unsafe { AVMediaTypeAudio }) else {
+                return MicPermission::Denied;
+            };
+            let tx = StdMutex::new(Some(tx));
+            let handler = block2::RcBlock::new(move |granted: Bool| {
+                if let Some(tx) = tx.lock().ok().and_then(|mut tx| tx.take()) {
+                    let _ = tx.send(granted.as_bool());
                 }
-                Err(e) => {
-                    eprintln!("check_microphone_by_recording: play error: {}", e);
-                    false
-                }
+            });
+            unsafe {
+                AVCaptureDevice::requestAccessForMediaType_completionHandler(audio, &handler)
+            };
+        }
+        match rx.await {
+            Ok(true) => MicPermission::Granted,
+            // A refused prompt records Denied; a launcher that can't prompt records nothing.
+            _ if av_audio_status() == AVAuthorizationStatus::NotDetermined => {
+                MicPermission::Blocked
             }
-        }
-        Err(e) => {
-            eprintln!("check_microphone_by_recording: stream error: {}", e);
-            false
+            _ => MicPermission::Denied,
         }
     }
-}
-
-#[cfg(target_os = "macos")]
-fn get_av_authorization_status() -> i64 {
-    use objc2::msg_send;
-    use objc2::runtime::{AnyClass, AnyObject};
-
-    // Link AVFoundation framework to ensure AVCaptureDevice class is available
-    #[link(name = "AVFoundation", kind = "framework")]
-    extern "C" {}
-
-    unsafe {
-        // Get AVCaptureDevice class
-        let av_capture_device_class = match AnyClass::get(c"AVCaptureDevice") {
-            Some(cls) => cls,
-            None => {
-                eprintln!("AVCaptureDevice class not found");
-                return 0;
-            }
-        };
-
-        // Get AVMediaTypeAudio - the actual constant value is "soun"
-        let ns_string_class = match AnyClass::get(c"NSString") {
-            Some(cls) => cls,
-            None => {
-                eprintln!("NSString class not found");
-                return 0;
-            }
-        };
-
-        let audio_type_cstr = c"soun";
-        let audio_type: *mut AnyObject =
-            msg_send![ns_string_class, stringWithUTF8String: audio_type_cstr.as_ptr()];
-
-        // Call [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio]
-        let status: i64 =
-            msg_send![av_capture_device_class, authorizationStatusForMediaType: audio_type];
-
-        status
+    #[cfg(not(target_os = "macos"))]
+    {
+        MicPermission::Granted
     }
 }
 
@@ -480,151 +428,5 @@ fn play_windows_sound(alias: &str) {
     let wide: Vec<u16> = alias.encode_utf16().chain(std::iter::once(0)).collect();
     unsafe {
         let _ = PlaySoundW(PCWSTR(wide.as_ptr()), None, SND_ALIAS | SND_ASYNC);
-    }
-}
-
-/// Request microphone permission and wait for user response
-pub async fn request_microphone_permission() -> Result<bool, String> {
-    #[cfg(target_os = "macos")]
-    {
-        // Check current authorization status first
-        let status = get_av_authorization_status();
-        eprintln!("request_microphone_permission: initial status = {}", status);
-
-        match status {
-            3 => return Ok(true),  // Already authorized
-            2 => return Ok(false), // Denied - user must change in System Preferences
-            1 => return Ok(false), // Restricted
-            _ => {
-                // 0 = Not determined, or unknown - need to request permission
-            }
-        }
-
-        // Trigger the permission request by attempting to use the microphone
-        let host = cpal::default_host();
-        let device = match host.default_input_device() {
-            Some(d) => d,
-            None => return Err("No input device available".to_string()),
-        };
-
-        let config = match device.default_input_config() {
-            Ok(c) => c,
-            Err(e) => return Err(format!("Failed to get input config: {}", e)),
-        };
-
-        // Build an input stream - this triggers the permission dialog
-        let stream = device.build_input_stream_raw(
-            config.config(),
-            config.sample_format(),
-            move |_data: &cpal::Data, _: &cpal::InputCallbackInfo| {
-                // Do nothing
-            },
-            move |_err| {
-                // Ignore errors
-            },
-            None,
-        );
-
-        match stream {
-            Ok(s) => {
-                // Try to play the stream to trigger permission
-                if s.play().is_ok() {
-                    eprintln!(
-                        "request_microphone_permission: stream started, waiting for user response"
-                    );
-
-                    // Wait for the dialog to appear and user to respond
-                    // Poll for up to 30 seconds, checking both AVFoundation status and actual recording capability
-                    for i in 0..300 {
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-
-                        // Check AVFoundation status
-                        let current_status = get_av_authorization_status();
-                        if i % 20 == 0 {
-                            eprintln!(
-                                "request_microphone_permission: polling iteration {}, status = {}",
-                                i, current_status
-                            );
-                        }
-
-                        // If status changed from "not determined", we have an answer
-                        if current_status == 3 {
-                            drop(s);
-                            eprintln!("request_microphone_permission: authorized via AVFoundation");
-                            return Ok(true);
-                        } else if current_status == 2 {
-                            drop(s);
-                            eprintln!("request_microphone_permission: denied via AVFoundation");
-                            return Ok(false);
-                        }
-
-                        // Every 2 seconds, also try the fallback check
-                        if i > 0 && i % 20 == 0 && current_status == 0 {
-                            // AVFoundation might not be working, try actual recording test
-                            if check_microphone_by_recording() {
-                                drop(s);
-                                eprintln!(
-                                    "request_microphone_permission: authorized via recording test"
-                                );
-                                return Ok(true);
-                            }
-                        }
-                    }
-                }
-                drop(s);
-
-                // Timeout - do final checks
-                let final_status = get_av_authorization_status();
-                eprintln!(
-                    "request_microphone_permission: timeout, final AVFoundation status = {}",
-                    final_status
-                );
-
-                if final_status == 3 {
-                    return Ok(true);
-                } else if final_status == 2 {
-                    return Ok(false);
-                }
-
-                // Final fallback: try recording
-                let can_record = check_microphone_by_recording();
-                eprintln!(
-                    "request_microphone_permission: fallback recording test = {}",
-                    can_record
-                );
-                Ok(can_record)
-            }
-            Err(e) => {
-                // Stream creation failed - might be permission denied
-                let current_status = get_av_authorization_status();
-                eprintln!(
-                    "request_microphone_permission: stream failed, status = {}, error = {}",
-                    current_status, e
-                );
-
-                if current_status == 3 {
-                    Ok(true)
-                } else if current_status == 2 {
-                    Ok(false)
-                } else {
-                    // Try fallback
-                    let can_record = check_microphone_by_recording();
-                    if can_record {
-                        Ok(true)
-                    } else {
-                        Err(format!("Failed to create audio stream: {}", e))
-                    }
-                }
-            }
-        }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let host = cpal::default_host();
-        match host.default_input_device() {
-            Some(_) => Ok(true),
-            None => Ok(false),
-        }
     }
 }
