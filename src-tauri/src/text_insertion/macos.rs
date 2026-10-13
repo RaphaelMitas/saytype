@@ -105,8 +105,7 @@ fn is_file_promise(kind: &NSString) -> bool {
         || kind == "com.apple.NSFilePromiseItemMetaData"
 }
 
-/// While pasting it is hidden from clipboard managers and other devices;
-/// left behind for a manual ⌘V it is an ordinary copy.
+/// Hidden only while pasting; a transcript left behind is the user's only copy.
 fn write_transcript(pasteboard: &NSPasteboard, text: &str, pasting: bool) {
     let item = NSPasteboardItem::new();
     item.setString_forType(&NSString::from_str(text), unsafe { NSPasteboardTypeString });

@@ -38,7 +38,7 @@ pub fn insert_text(app: &tauri::AppHandle, text: &str) -> Result<(), String> {
         (VK_V, true),
         (VK_CONTROL, true),
     ]) {
-        // Nothing was pasted: leave an ordinary copy for a manual Ctrl+V.
+        // the copy above is excluded from clipboard history
         let _ = clipboard.set_text(text);
         return Err(format!("{e}; transcript left on the clipboard"));
     }
