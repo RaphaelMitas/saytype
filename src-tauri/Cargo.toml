@@ -38,6 +38,8 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 core-graphics = "0.25"
 core-foundation = "0.10"
 core-foundation-sys = "0.8"
+objc2-av-foundation = { version = "0.3", default-features = false, features = ["std", "AVCaptureDevice", "AVMediaFormat", "block2"] }
+block2 = "0.6"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 arboard = "3"

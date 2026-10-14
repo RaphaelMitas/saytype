@@ -33,20 +33,12 @@ fn setup_tray_inner(app: &AppHandle, tooltip: &str) -> Result<(), Box<dyn std::e
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
         .tooltip(tooltip)
-        .on_menu_event(|app, event| {
-            match event.id.as_ref() {
-                "settings" => {
-                    // Show settings window
-                    if let Some(window) = app.get_webview_window("settings") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
-                }
-                "quit" => {
-                    app.exit(0);
-                }
-                _ => {}
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "settings" => show_settings(app),
+            "quit" => {
+                app.exit(0);
             }
+            _ => {}
         })
         .build(app)?;
 
@@ -55,6 +47,13 @@ fn setup_tray_inner(app: &AppHandle, tooltip: &str) -> Result<(), Box<dyn std::e
     *tray_guard = Some(tray);
 
     Ok(())
+}
+
+pub fn show_settings(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
