@@ -29,12 +29,12 @@ function App() {
 
         // On Windows, only microphone matters (no accessibility/input monitoring)
         if (platform === "windows") {
-          if (!perms.microphone) {
+          if (perms.microphone !== "granted") {
             setShowOnboarding(true);
           }
         } else {
           // Show onboarding if any permission is missing
-          if (!perms.microphone || !perms.accessibility || !perms.input_monitoring) {
+          if (perms.microphone !== "granted" || !perms.accessibility || !perms.input_monitoring) {
             setShowOnboarding(true);
           }
         }
@@ -48,14 +48,11 @@ function App() {
     checkFirstRun();
   }, []);
 
-  // Listen for accessibility-required event from Rust backend
-  // This is emitted at startup if the hotkey listener cannot work
   useEffect(() => {
-    // Server Only mode doesn't need accessibility
+    // Server Only mode needs no local permissions
     if (isServerOnly.current) return;
 
-    const unlisten = listen("accessibility-required", () => {
-      console.log("[App] Accessibility permission required for hotkey listener");
+    const unlisten = listen("permission-required", () => {
       setShowOnboarding(true);
     });
 

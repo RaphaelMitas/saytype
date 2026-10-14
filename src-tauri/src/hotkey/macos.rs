@@ -208,6 +208,14 @@ fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
     println!("[DEBUG] Hotkey pressed - starting recording");
     let handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
+        // Without access macOS records silence instead of failing.
+        if audio::microphone_permission() != audio::MicPermission::Granted {
+            audio::play_busy_sound();
+            crate::tray::show_settings(&handle);
+            let _ = handle.emit("permission-required", ());
+            return;
+        }
+
         // Check if sidecar is ready before allowing recording
         if let Some(state) = handle.try_state::<AppState>() {
             let sidecar_ready = state.sidecar_ready.lock().await;
@@ -248,12 +256,14 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
     };
 
     tauri::async_runtime::spawn(async move {
-        if let Some(state) = handle.try_state::<AppState>() {
-            let mut is_recording = state.is_recording.lock().await;
-            *is_recording = false;
+        let was_recording = match handle.try_state::<AppState>() {
+            Some(state) => std::mem::replace(&mut *state.is_recording.lock().await, false),
+            None => true,
+        };
+        // A refused press never started recording; its busy sound already played.
+        if was_recording {
+            audio::play_stop_sound();
         }
-
-        audio::play_stop_sound();
 
         println!("[DEBUG] Stopping recording...");
         let audio_path = match audio::stop_recording() {

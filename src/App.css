@@ -267,19 +267,6 @@ button:disabled {
   background: var(--border-color);
 }
 
-/* Checkbox */
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.checkbox-label input {
-  width: 18px;
-  height: 18px;
-}
-
 /* About Section */
 .about-section {
   text-align: center;

@@ -137,22 +137,6 @@ pub fn check_accessibility_permission() -> bool {
     }
 }
 
-/// Open System Preferences to Accessibility settings
-pub fn open_accessibility_settings() -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
-            .spawn()
-            .map_err(|e| format!("Failed to open System Preferences: {}", e))?;
-        Ok(())
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err("Not supported on this platform".to_string())
-    }
-}
-
 /// Check if input monitoring permission is granted using IOHIDRequestAccess.
 /// This API both checks and requests Input Monitoring permission.
 /// Returns true if permission is granted.
@@ -173,18 +157,33 @@ pub fn check_input_monitoring_permission() -> bool {
     }
 }
 
-/// Open Input Monitoring privacy settings
-pub fn open_input_monitoring_settings() -> Result<(), String> {
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrivacyPane {
+    Microphone,
+    Accessibility,
+    InputMonitoring,
+}
+
+pub fn open_privacy_settings(pane: PrivacyPane) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
+        let anchor = match pane {
+            PrivacyPane::Microphone => "Privacy_Microphone",
+            PrivacyPane::Accessibility => "Privacy_Accessibility",
+            PrivacyPane::InputMonitoring => "Privacy_ListenEvent",
+        };
         std::process::Command::new("open")
-            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
+            .arg(format!(
+                "x-apple.systempreferences:com.apple.preference.security?{anchor}"
+            ))
             .spawn()
-            .map_err(|e| format!("Failed to open System Preferences: {}", e))?;
+            .map_err(|e| format!("Failed to open System Settings: {}", e))?;
         Ok(())
     }
     #[cfg(not(target_os = "macos"))]
     {
+        let _ = pane;
         Err("Not supported on this platform".to_string())
     }
 }
