@@ -4,7 +4,5 @@
 <dict>
     <key>NSMicrophoneUsageDescription</key>
     <string>Saytype needs microphone access to record audio for transcription.</string>
-    <key>NSAppleEventsUsageDescription</key>
-    <string>Saytype needs to control your keyboard to paste transcribed text.</string>
 </dict>
 </plist>

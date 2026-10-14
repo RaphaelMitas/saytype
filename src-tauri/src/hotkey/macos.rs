@@ -246,15 +246,6 @@ fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
 fn on_hotkey_released(app_handle: &tauri::AppHandle) {
     let handle = app_handle.clone();
 
-    // Get modifier keycodes for clearing
-    let modifier_keycodes: Vec<i64> = match app_handle.try_state::<AppState>() {
-        Some(state) => match state.current_hotkey.lock() {
-            Ok(hotkey) => hotkey.modifier_keycodes(),
-            Err(_) => vec![54], // fallback to right command
-        },
-        None => vec![54],
-    };
-
     tauri::async_runtime::spawn(async move {
         let was_recording = match handle.try_state::<AppState>() {
             Some(state) => std::mem::replace(&mut *state.is_recording.lock().await, false),
@@ -286,19 +277,13 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
             Ok(text) => {
                 println!("[DEBUG] Transcription result: '{}'", text);
                 if !text.is_empty() {
-                    let text_clone = text.clone();
-                    let keycodes = modifier_keycodes.clone();
-                    let result = handle.run_on_main_thread(move || {
-                        if let Err(e) =
-                            text_insertion::insert_text_via_clipboard(&text_clone, &keycodes)
-                        {
+                    let paste_handle = handle.clone();
+                    let paste_text = text.clone();
+                    std::thread::spawn(move || {
+                        if let Err(e) = text_insertion::insert_text(&paste_handle, &paste_text) {
                             eprintln!("[DEBUG] Failed to insert text: {}", e);
                         }
                     });
-
-                    if let Err(e) = result {
-                        eprintln!("[DEBUG] Failed to run on main thread: {}", e);
-                    }
                     let _ = handle.emit("transcription-complete", text);
                 } else {
                     println!("[DEBUG] Transcription was empty");

@@ -31,7 +31,7 @@ No external dependencies required - uses native CPAL for audio recording.
 │      hotkey.rs           audio.rs          sidecar.rs           │
 │                                                 ↓                │
 │ Frontend event  ←  Tauri emit  ←  Clipboard paste               │
-│   useRecording.ts     lib.rs      text_insertion.rs             │
+│   useRecording.ts     lib.rs      text_insertion/               │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -40,7 +40,7 @@ No external dependencies required - uses native CPAL for audio recording.
 1. **Tauri/Rust** (`src-tauri/src/`) - System integration layer
    - Hotkey capture via macOS CGEventTap (runs on dedicated CFRunLoop thread)
    - Audio recording via native CPAL (16kHz WAV output)
-   - Text insertion via clipboard + AppleScript keystroke simulation
+   - Text insertion via clipboard + synthetic ⌘V (CGEvent), clipboard restored after
    - Sidecar lifecycle management via stdin/stdout JSON IPC
 
 2. **Python Sidecar** (`sidecar/`) - ML inference
@@ -61,7 +61,7 @@ No external dependencies required - uses native CPAL for audio recording.
 | `hotkey.rs` | Right Cmd key detection (keycode 54), AtomicBool state |
 | `audio.rs` | CPAL audio capture, sample rate conversion |
 | `sidecar.rs` | Sidecar spawn, JSON IPC, cross-platform binary lookup |
-| `text_insertion.rs` | Clipboard save/restore, `AXIsProcessTrusted()` check |
+| `text_insertion/` | Clipboard save/restore and ⌘V per platform, permission checks |
 | `tray.rs` | Menu bar icon, recording state indicator |
 
 ### State Management
@@ -82,7 +82,7 @@ This app is macOS-only with heavy use of:
 - `CGEventTap` for global hotkey capture
 - `AXIsProcessTrusted()` for accessibility permission checks
 - `afplay` for system sounds
-- `osascript` for Cmd+V simulation
+- `CGEventPost` for ⌘V simulation
 
 Sidecar binary naming follows Tauri convention: `transcribe-server-{arch}-apple-darwin`
 
