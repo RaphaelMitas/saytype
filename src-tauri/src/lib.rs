@@ -12,7 +12,7 @@ mod transcriber;
 mod tray;
 
 use std::sync::Arc;
-use tauri::{Emitter, WindowEvent};
+use tauri::{Emitter, Manager, WindowEvent};
 use tokio::sync::Mutex;
 
 pub use config::HotkeyConfig;
@@ -329,7 +329,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(app_state)
         .setup(|app| {
-            // A regular app's windows can't join another app's fullscreen Space, which hid the preview
+            // A regular app's windows can't join another app's fullscreen Space, so stay an accessory app while Settings is closed
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
@@ -416,6 +416,10 @@ pub fn run() {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 window.hide().unwrap();
                 api.prevent_close();
+                #[cfg(target_os = "macos")]
+                let _ = window
+                    .app_handle()
+                    .set_activation_policy(tauri::ActivationPolicy::Accessory);
             }
         })
         .invoke_handler(tauri::generate_handler![

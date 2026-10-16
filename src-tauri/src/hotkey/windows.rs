@@ -8,7 +8,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     KBDLLHOOKSTRUCT_FLAGS, MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
 
-use super::recording::{on_hotkey_pressed, on_hotkey_released, HOTKEY_ACTIVE};
+use super::recording::{set_hotkey_held, HOTKEY_ACTIVE};
 use crate::AppState;
 
 // Track currently held keys (VK codes)
@@ -153,13 +153,5 @@ fn check_hotkey_state() {
         Err(_) => false,
     };
 
-    let was_active = HOTKEY_ACTIVE.load(Ordering::SeqCst);
-
-    if all_held && !was_active {
-        HOTKEY_ACTIVE.store(true, Ordering::SeqCst);
-        on_hotkey_pressed(&app_handle);
-    } else if !all_held && was_active {
-        HOTKEY_ACTIVE.store(false, Ordering::SeqCst);
-        on_hotkey_released(&app_handle);
-    }
+    set_hotkey_held(&app_handle, all_held);
 }

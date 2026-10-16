@@ -109,15 +109,13 @@ function useOverflow(content: string) {
 }
 
 function Meter({ level }: { level: number }) {
-  // Speech mostly sits between -40dB and -10dB, so stretch that range over the bars
-  const loudness = Math.min(1, Math.max(0, (level - 0.3) / 0.55));
   return (
     <div className="flex h-4 items-center gap-0.5">
       {BAR_SHAPE.map((shape) => (
         <span
           key={shape}
           className="w-[3px] rounded-full bg-zinc-100 transition-[height] duration-75"
-          style={{ height: `${Math.max(3, shape * loudness * 16)}px` }}
+          style={{ height: `${Math.max(3, shape * level * 16)}px` }}
         />
       ))}
     </div>

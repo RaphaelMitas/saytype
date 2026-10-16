@@ -10,7 +10,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Mutex, OnceLock};
 use tauri::Manager;
 
-use super::recording::{on_hotkey_pressed, on_hotkey_released, HOTKEY_ACTIVE};
+use super::recording::{set_hotkey_held, HOTKEY_ACTIVE};
 use crate::{config, AppState};
 
 // Track currently held keys
@@ -161,15 +161,7 @@ fn handle_event(app_handle: &tauri::AppHandle, event_type: CGEventType, event: &
         Err(_) => false,
     };
 
-    let was_active = HOTKEY_ACTIVE.load(Ordering::SeqCst);
-
-    if all_held && !was_active {
-        HOTKEY_ACTIVE.store(true, Ordering::SeqCst);
-        on_hotkey_pressed(app_handle);
-    } else if !all_held && was_active {
-        HOTKEY_ACTIVE.store(false, Ordering::SeqCst);
-        on_hotkey_released(app_handle);
-    }
+    set_hotkey_held(app_handle, all_held);
 }
 
 /// Check if a modifier key is currently pressed based on event flags

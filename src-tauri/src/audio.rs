@@ -312,7 +312,7 @@ fn write_recording(path: &str, samples: &[f32], sample_rate: u32) -> Result<(), 
     write_wav_file(path, &resampled, TARGET_SAMPLE_RATE)
 }
 
-/// Loudness of the last 50ms on a 0..1 scale spanning -60dB to 0dB.
+/// Loudness of the last 50ms on a 0..1 scale over -40dB..-10dB, where speech mostly sits.
 pub fn recording_level() -> Option<f32> {
     let (samples, sample_rate) = live_samples()?;
     let samples = samples.lock().ok()?;
@@ -323,7 +323,7 @@ pub fn recording_level() -> Option<f32> {
     let tail = &samples[samples.len() - window..];
     let rms = (tail.iter().map(|s| s * s).sum::<f32>() / window as f32).sqrt();
     let db = 20.0 * rms.max(1e-6).log10();
-    Some(((db + 60.0) / 60.0).clamp(0.0, 1.0))
+    Some(((db + 40.0) / 30.0).clamp(0.0, 1.0))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize)]

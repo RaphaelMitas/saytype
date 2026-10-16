@@ -4,10 +4,19 @@ use tauri::{Emitter, Manager};
 use crate::preview::{self, Outcome};
 use crate::{audio, text_insertion, transcriber, AppState};
 
-// Track whether the hotkey combo is currently activated
 pub(super) static HOTKEY_ACTIVE: AtomicBool = AtomicBool::new(false);
 
-pub(super) fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
+pub(super) fn set_hotkey_held(app_handle: &tauri::AppHandle, held: bool) {
+    if HOTKEY_ACTIVE.swap(held, Ordering::SeqCst) != held {
+        if held {
+            on_hotkey_pressed(app_handle);
+        } else {
+            on_hotkey_released(app_handle);
+        }
+    }
+}
+
+fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
     println!("[DEBUG] Hotkey pressed - starting recording");
     let handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
@@ -49,14 +58,16 @@ pub(super) fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
     });
 }
 
-pub(super) fn on_hotkey_released(app_handle: &tauri::AppHandle) {
+fn on_hotkey_released(app_handle: &tauri::AppHandle) {
     let handle = app_handle.clone();
 
     tauri::async_runtime::spawn(async move {
-        let was_recording = match handle.try_state::<AppState>() {
-            Some(state) => std::mem::replace(&mut *state.is_recording.lock().await, false),
-            None => true,
+        let Some(state) = handle.try_state::<AppState>() else {
+            return;
         };
+        // Held until the recorder stops, so a quick second press can't start in between
+        let mut is_recording = state.is_recording.lock().await;
+        let was_recording = std::mem::replace(&mut *is_recording, false);
         // A refused press never started recording; its busy sound already played.
         if was_recording {
             audio::play_stop_sound();
@@ -65,20 +76,21 @@ pub(super) fn on_hotkey_released(app_handle: &tauri::AppHandle) {
         let preview_session = preview::stop(&handle);
 
         println!("[DEBUG] Stopping recording...");
-        let audio_path = match audio::stop_recording() {
+        let audio_path = audio::stop_recording();
+        drop(is_recording);
+        crate::tray::set_recording_state(&handle, false);
+        let audio_path = match audio_path {
             Ok(path) => {
                 println!("[DEBUG] Recording saved to: {}", path);
                 path
             }
             Err(e) => {
                 eprintln!("[DEBUG] Failed to stop recording: {}", e);
-                crate::tray::set_recording_state(&handle, false);
                 preview::finish(&handle, preview_session, Outcome::Empty);
                 return;
             }
         };
 
-        crate::tray::set_recording_state(&handle, false);
         let _ = handle.emit("transcription-started", ());
 
         println!("[DEBUG] Starting transcription...");
@@ -86,6 +98,8 @@ pub(super) fn on_hotkey_released(app_handle: &tauri::AppHandle) {
             Ok(text) => {
                 println!("[DEBUG] Transcription result: '{}'", text);
                 if !text.is_empty() {
+                    // Before the paste starts, so a fast failure always lands after it
+                    preview::finish(&handle, preview_session, Outcome::Pasted(text.clone()));
                     let paste_handle = handle.clone();
                     let paste_text = text.clone();
                     std::thread::spawn(move || {
@@ -94,7 +108,6 @@ pub(super) fn on_hotkey_released(app_handle: &tauri::AppHandle) {
                             preview::finish(&paste_handle, preview_session, Outcome::Failed(e));
                         }
                     });
-                    preview::finish(&handle, preview_session, Outcome::Pasted(text.clone()));
                     let _ = handle.emit("transcription-complete", text);
                 } else {
                     println!("[DEBUG] Transcription was empty");

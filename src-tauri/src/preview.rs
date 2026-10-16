@@ -21,10 +21,12 @@ const LEVEL_INTERVAL: Duration = Duration::from_millis(60);
 const LINGER: Duration = Duration::from_millis(1200);
 const FADE: Duration = Duration::from_millis(200);
 
-/// Bumped on every press so loops and hide timers from an earlier recording stand down.
+/// Bumped on every press so loops and outcomes from an earlier recording stand down.
 static SESSION: AtomicU64 = AtomicU64::new(0);
 /// The session still recording, 0 once the hotkey is released.
 static LIVE: AtomicU64 = AtomicU64::new(0);
+/// Bumped on every show and outcome, so only the latest outcome's timer hides the overlay.
+static SHOWN: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Serialize)]
 #[serde(tag = "phase", rename_all = "snake_case")]
@@ -90,6 +92,7 @@ pub fn start(app: &AppHandle) {
         .try_state::<AppState>()
         .and_then(|state| state.current_hotkey.lock().ok().map(|h| h.label.clone()))
         .unwrap_or_default();
+    SHOWN.fetch_add(1, Ordering::SeqCst);
     show_on_cursor_screen(app);
     send(app, OverlayEvent::Listening { style, hotkey });
 
@@ -119,15 +122,16 @@ pub fn finish(app: &AppHandle, session: u64, outcome: Outcome) {
         },
     );
 
+    let shown = SHOWN.fetch_add(1, Ordering::SeqCst) + 1;
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(LINGER).await;
-        if SESSION.load(Ordering::SeqCst) != session {
+        if SHOWN.load(Ordering::SeqCst) != shown {
             return;
         }
         send(&app, OverlayEvent::Hidden);
         tokio::time::sleep(FADE).await;
-        if SESSION.load(Ordering::SeqCst) == session {
+        if SHOWN.load(Ordering::SeqCst) == shown {
             if let Some(window) = app.get_webview_window(LABEL) {
                 let _ = window.hide();
             }
@@ -201,7 +205,7 @@ fn show_on_cursor_screen(app: &AppHandle) {
 fn cursor_monitor(app: &AppHandle) -> Option<Monitor> {
     let primary = app.primary_monitor().ok().flatten();
     let cursor = app.cursor_position().ok()?;
-    // macOS reports the cursor in points scaled by the primary screen, but looks monitors up in points
+    // macOS reports the cursor in pixels at the primary screen's scale, but looks monitors up in points
     #[cfg(target_os = "macos")]
     let cursor = cursor.to_logical::<f64>(primary.as_ref().map_or(1.0, Monitor::scale_factor));
     app.monitor_from_point(cursor.x, cursor.y)
