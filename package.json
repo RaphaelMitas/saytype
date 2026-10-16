@@ -9,12 +9,13 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "check": "biome check src/ && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings && ruff format --check sidecar/ tests/ && ruff check sidecar/ tests/",
-    "check:fix": "biome check --write src/ && cargo fmt --manifest-path src-tauri/Cargo.toml && ruff format sidecar/ tests/ && ruff check --fix sidecar/ tests/",
+    "check": "biome check && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings && ruff format --check sidecar/ tests/ && ruff check sidecar/ tests/",
+    "check:fix": "biome check --write && cargo fmt --manifest-path src-tauri/Cargo.toml && ruff format sidecar/ tests/ && ruff check --fix sidecar/ tests/",
     "typecheck": "tsc --noEmit && cargo check --manifest-path src-tauri/Cargo.toml && pyright",
     "test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "e2e:sidecar": "python3 tests/e2e/sidecar_e2e.py \"src-tauri/binaries/transcribe-server-$(rustc -vV | sed -n 's/^host: //p')\"",
-    "e2e:app": "./tests/e2e/app_e2e.sh"
+    "e2e:app": "./tests/e2e/app_e2e.sh",
+    "screenshots": "node scripts/screenshots/capture.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",
@@ -33,6 +34,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.0",
+    "playwright": "^1.64.1",
     "pyright": "^1.1.408",
     "tailwindcss": "^4.3.3",
     "typescript": "~7.0.0",

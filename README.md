@@ -6,6 +6,25 @@ macOS menu bar app for push-to-talk speech-to-text. Hold the Right Command key t
 
 > **Note:** This app was vibecoded with [Claude](https://claude.ai).
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/RaphaelMitas/saytype/releases/latest/download/screenshot-general-dark.png">
+    <img src="https://github.com/RaphaelMitas/saytype/releases/latest/download/screenshot-general-light.png" alt="General settings" width="49%">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/RaphaelMitas/saytype/releases/latest/download/screenshot-hotkey-dark.png">
+    <img src="https://github.com/RaphaelMitas/saytype/releases/latest/download/screenshot-hotkey-light.png" alt="Hotkey settings" width="49%">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/RaphaelMitas/saytype/releases/latest/download/screenshot-mode-dark.png">
+    <img src="https://github.com/RaphaelMitas/saytype/releases/latest/download/screenshot-mode-light.png" alt="Mode settings" width="49%">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/RaphaelMitas/saytype/releases/latest/download/screenshot-permissions-dark.png">
+    <img src="https://github.com/RaphaelMitas/saytype/releases/latest/download/screenshot-permissions-light.png" alt="Permissions settings" width="49%">
+  </picture>
+</p>
+
 ## Installation
 
 ### Homebrew
