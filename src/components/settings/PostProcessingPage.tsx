@@ -2,6 +2,7 @@ import { cn } from "cn";
 import { ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
+import { TranscriptBox } from "@/components/settings/TranscriptBox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -293,12 +294,7 @@ export function PostProcessingPage() {
             {testing ? "Running…" : "Run"}
           </Button>
         </div>
-        {result && (
-          <div className="rounded-lg bg-muted px-3 py-2 text-sm whitespace-pre-wrap select-text">
-            {result.text}{" "}
-            <span className="text-xs text-muted-foreground">· {result.millis} ms</span>
-          </div>
-        )}
+        {result && <TranscriptBox label={`Result · ${result.millis} ms`} text={result.text} />}
         {error && <p className="text-xs text-destructive">{error}</p>}
       </div>
     </>

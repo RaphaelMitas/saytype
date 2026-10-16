@@ -1,11 +1,11 @@
 import { cn } from "cn";
-import { Check, Copy, Mic } from "lucide-react";
+import { Mic } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
+import { TranscriptBox } from "@/components/settings/TranscriptBox";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { useCopied } from "@/hooks/useCopied";
 import type { UseRecordingResult } from "@/hooks/useRecording";
 import type { SelfTest } from "@/hooks/useSelfTest";
 import { DEFAULT_PORT, type NetworkConfig } from "@/lib/network";
@@ -52,27 +52,6 @@ function PreviewSetting() {
       <p className="text-xs text-muted-foreground">
         {PREVIEW_STYLES.find((option) => option.value === style)?.hint}
       </p>
-    </div>
-  );
-}
-
-function TranscriptBox({ label, text }: { label: string; text: string }) {
-  const { copied, copy } = useCopied();
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
-      <div className="flex items-start gap-2 rounded-lg bg-muted py-2 pr-2 pl-3 text-sm select-text">
-        <span className="flex-1 py-0.5">{text}</span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Copy"
-          className="text-muted-foreground"
-          onClick={() => copy(text)}
-        >
-          {copied ? <Check /> : <Copy />}
-        </Button>
-      </div>
     </div>
   );
 }

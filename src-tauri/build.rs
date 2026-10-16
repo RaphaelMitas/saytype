@@ -21,13 +21,9 @@ fn build_foundation_models_bridge() {
         return;
     }
 
-    // Where xcode-select points, so switching Xcode checks the SDK again
+    // Watching xcode-select's link makes cargo scan all of Xcode, so run cargo clean after a switch
     println!("cargo:rerun-if-env-changed=DEVELOPER_DIR");
-    for link in ["/var/select/developer_dir", "/var/db/xcode_select_link"] {
-        if Path::new(link).exists() {
-            println!("cargo:rerun-if-changed={link}");
-        }
-    }
+    println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
 
     let xcrun = |args: &[&str]| -> Option<String> {
         let output = Command::new("xcrun").args(args).output().ok()?;

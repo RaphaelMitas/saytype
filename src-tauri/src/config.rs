@@ -180,8 +180,7 @@ pub fn load_config() -> AppConfig {
     crate::e2e::apply_mode_override(AppConfig::default())
 }
 
-/// Save configuration to disk
-pub fn save_config(config: &AppConfig) -> Result<(), String> {
+fn save_config(config: &AppConfig) -> Result<(), String> {
     let path = config_path()?;
 
     // Create parent directory if needed

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 
 export type RecordingState = "initializing" | "idle" | "recording" | "processing";
 
-/** `raw` differs from `text` when post-processing rewrote it */
 export interface Transcription {
   text: string;
   raw: string;
@@ -22,6 +21,9 @@ export function useRecording(): UseRecordingResult {
   const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => {
+    // An earlier dictation can finish while the next one is already recording
+    const settle = () => setState((current) => (current === "recording" ? current : "idle"));
+
     // Check if sidecar already ready
     invoke<boolean>("get_sidecar_ready").then((ready) => {
       if (ready) setState("idle");
@@ -45,13 +47,13 @@ export function useRecording(): UseRecordingResult {
     const unlistenTranscriptionComplete = listen<Transcription>(
       "transcription-complete",
       (event) => {
-        setState("idle");
+        settle();
         setLastTranscription(event.payload);
       },
     );
 
     const unlistenTranscriptionError = listen<string>("transcription-error", (event) => {
-      setState("idle");
+      settle();
       setLastError(event.payload);
     });
 
