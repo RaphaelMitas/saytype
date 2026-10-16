@@ -33,11 +33,7 @@ _model_name = None
 
 
 class VocabHead:
-    """Keeps the model's decoder and joint in step with the trained head file on disk.
-
-    Checked before every transcription, so a finished training run applies to the next dictation
-    and a deleted file brings back the base model.
-    """
+    """Keeps the model's decoder and joint in step with the trained head file on disk."""
 
     def __init__(self, path: Path):
         self.path = path
@@ -82,6 +78,11 @@ def load_model(model_name: str):
 
         _model = from_pretrained(model_name)
         _model_name = model_name
+        # from_pretrained skips the tokenizer, and training needs it cached for when it runs offline
+        try:
+            vocab_trainer.tokenizer_path(model_name)
+        except Exception as e:
+            sys.stderr.write(f"[VOCAB] Couldn't fetch tokenizer.model: {e}\n")
         return _model
     except ImportError as e:
         print(

@@ -20,11 +20,6 @@ fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
     println!("[DEBUG] Hotkey pressed - starting recording");
     let handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
-        if vocab::is_recording_example() {
-            audio::play_busy_sound();
-            return;
-        }
-
         // Without access macOS records silence instead of failing.
         if audio::microphone_permission() != audio::MicPermission::Granted {
             audio::play_busy_sound();
@@ -45,6 +40,11 @@ fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
         // Held until the overlay is up, so a quick release waits for the press to finish
         let mut is_recording = state.is_recording.lock().await;
         if !HOTKEY_ACTIVE.load(Ordering::SeqCst) {
+            return;
+        }
+        // Checked under the lock, which start_example_recording also holds while it starts
+        if vocab::is_recording_example() {
+            audio::play_busy_sound();
             return;
         }
 

@@ -11,7 +11,6 @@ pub fn now_millis() -> u64 {
         .unwrap_or(0)
 }
 
-/// Unique within a run by the counter, across runs by the clock
 pub fn new_id() -> String {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     format!(

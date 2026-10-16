@@ -2,8 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface HistoryEntry {
   id: string;
-  /** Unix milliseconds */
-  at: number;
+  at_ms: number;
   text: string;
 }
 

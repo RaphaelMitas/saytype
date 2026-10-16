@@ -3,8 +3,7 @@
 Run as `transcribe-server --train job.json`. Each word is spoken in carrier sentences by the
 macOS `say` voices, and the user's own recordings of it are mixed in. The encoder stays frozen,
 so every clip goes through it once and is cached per word: adding a word only synthesizes that
-word. Training writes head.safetensors, which the serving sidecar swaps in before its next
-transcription.
+word.
 
 Job file, written by the app:
     {"words": [{"word": "Flatsby", "say_as": null}],
@@ -32,7 +31,7 @@ import mlx.optimizers as optim
 import numpy as np
 import sentencepiece as spm
 import soundfile as sf
-from huggingface_hub import snapshot_download
+from huggingface_hub import hf_hub_download
 from mlx.utils import tree_flatten, tree_map
 from parakeet_mlx.audio import get_logmel
 from tdt_loss import tdt_log_likelihood
@@ -107,13 +106,17 @@ def installed_voices() -> dict[str, list[str]]:
     return voices
 
 
+def tokenizer_path(model_name: str) -> str:
+    return hf_hub_download(model_name, "tokenizer.model")
+
+
 class Model:
     """The base model plus the pieces training needs: tokenizer and frozen-encoder features."""
 
     def __init__(self, model, model_name: str):
         self.model = model
         self.tokenizer = spm.SentencePieceProcessor()
-        self.tokenizer.Load(str(Path(snapshot_download(model_name)) / "tokenizer.model"))
+        self.tokenizer.Load(tokenizer_path(model_name))
 
     def encode(self, audio: np.ndarray) -> mx.array:
         mel = get_logmel(mx.array(audio), self.model.preprocessor_config)
@@ -165,6 +168,7 @@ def speak(clip: dict, path: Path) -> np.ndarray:
             "-o",
             str(path),
             f"--data-format=LEI16@{SAMPLE_RATE}",
+            "--",
             clip["spoken"],
         ],
         check=True,
@@ -378,4 +382,7 @@ def run(job_path: Path, model, model_name: str) -> None:
         emit(progress=start + (1 - start) * step / steps)
 
     weights = train(model, rows, on_step)
+    # A run the app stopped but that kept going must not overwrite a newer head
+    if json.loads(job_path.read_text())["spec"] != job["spec"]:
+        raise RuntimeError("Superseded by a newer training run")
     write_head(weights, Path(job["head_path"]), Path(job["meta_path"]), job["spec"])

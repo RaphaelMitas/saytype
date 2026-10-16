@@ -272,12 +272,19 @@ def test_train_mode(binary: Path, fixture: Path, expected: str) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         vocab = Path(tmp)
         job = vocab / "job.json"
+        # The fixture stays held out, so the check below catches a head that hurts dictation
+        example_text = "I use Saytype every day."
+        example = vocab / "example.wav"
+        subprocess.run(
+            ["say", "-o", str(example), "--data-format=LEI16@16000", "--", example_text],
+            check=True,
+        )
         spec = {"words": [{"word": "Saytype", "say_as": None}]}
         job.write_text(
             json.dumps(
                 {
                     "words": spec["words"],
-                    "examples": [{"id": "fixture", "audio": str(fixture), "text": expected}],
+                    "examples": [{"id": "example", "audio": str(example), "text": example_text}],
                     "cache_dir": str(vocab / "cache"),
                     "head_path": str(vocab / "head.safetensors"),
                     "meta_path": str(vocab / "head.json"),

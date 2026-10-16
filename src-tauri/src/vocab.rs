@@ -12,8 +12,8 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
-use std::time::Duration;
+use std::sync::{Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 use tauri::Emitter;
 
 use crate::config::{self, AppMode, Word};
@@ -21,7 +21,6 @@ use crate::{audio, e2e, history, sidecar, storage, AppState};
 
 const MAX_WORDS: usize = 50;
 const MAX_WORD_CHARS: usize = 50;
-/// Lets a burst of edits become one training run
 const DEBOUNCE: Duration = Duration::from_secs(20);
 /// Longer clips make a training step too large; matches MAX_EXAMPLE_SECONDS in the trainer
 const MAX_EXAMPLE_SECONDS: f32 = 15.0;
@@ -33,11 +32,11 @@ pub enum Source {
     Recorded,
 }
 
+/// Belongs to every word its sentence mentions, since it teaches all of them
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Example {
     pub id: String,
-    pub word: String,
-    /// What was said, with the word spelled right
+    /// What was said, with the words spelled right
     pub text: String,
     pub source: Source,
 }
@@ -80,6 +79,10 @@ static TRAINER: Mutex<Trainer> = Mutex::new(Trainer {
 
 static RECORDING_EXAMPLE: AtomicBool = AtomicBool::new(false);
 
+fn lock_trainer() -> MutexGuard<'static, Trainer> {
+    TRAINER.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 pub fn vocab_dir() -> Result<PathBuf, String> {
     Ok(config::data_dir()?.join("vocab"))
 }
@@ -104,6 +107,15 @@ fn read_examples(vocab: &Path) -> Vec<Example> {
     storage::read_json(&examples_index(vocab))
 }
 
+/// The audio of an example that is in the index; ids come from the frontend
+fn known_example(vocab: &Path, id: &str) -> Result<PathBuf, String> {
+    if read_examples(vocab).iter().any(|e| e.id == id) {
+        Ok(example_audio(vocab, id))
+    } else {
+        Err("That example no longer exists".to_string())
+    }
+}
+
 /// Everything a head depends on. The app version is in it because a new sidecar may train
 /// differently, and retraining after an update takes seconds.
 fn spec(words: &[Word], examples: &[Example]) -> Value {
@@ -125,14 +137,29 @@ fn trained_spec(vocab: &Path) -> Option<Value> {
     storage::read_json::<Meta>(&head_meta(vocab)).spec
 }
 
-fn learned_words(trained: Option<&Value>) -> Vec<Word> {
-    trained
-        .and_then(|spec| serde_json::from_value(spec["words"].clone()).ok())
-        .unwrap_or_default()
+fn needs_training(vocab: &Path, words: &[Word]) -> bool {
+    trained_spec(vocab) != Some(spec(words, &read_examples(vocab)))
+}
+
+fn collapse_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Whole-word and case-insensitive, so "Saytype's" counts and "Saytypes" doesn't
+fn mentions(text: &str, word: &str) -> bool {
+    let text = text.to_lowercase();
+    let word = word.to_lowercase();
+    text.match_indices(&word).any(|(at, _)| {
+        let before = text[..at].chars().next_back();
+        let after = text[at + word.len()..].chars().next();
+        !before.is_some_and(char::is_alphanumeric) && !after.is_some_and(char::is_alphanumeric)
+    })
 }
 
 fn views(words: &[Word], examples: &[Example], trained: Option<&Value>) -> Vec<WordView> {
-    let learned = learned_words(trained);
+    let learned: Vec<Word> = trained
+        .and_then(|spec| serde_json::from_value(spec["words"].clone()).ok())
+        .unwrap_or_default();
     words
         .iter()
         .map(|word| WordView {
@@ -141,7 +168,7 @@ fn views(words: &[Word], examples: &[Example], trained: Option<&Value>) -> Vec<W
             learned: learned.contains(word),
             examples: examples
                 .iter()
-                .filter(|e| e.word == word.word)
+                .filter(|e| mentions(&e.text, &word.word))
                 .cloned()
                 .collect(),
         })
@@ -157,18 +184,23 @@ fn current_views() -> Result<Vec<WordView>, String> {
     ))
 }
 
+fn find_word<'a>(words: &'a [Word], word: &str) -> Option<&'a Word> {
+    let word = collapse_whitespace(word).to_lowercase();
+    words.iter().find(|w| w.word.to_lowercase() == word)
+}
+
 fn clean_word(word: &str, words: &[Word]) -> Result<String, String> {
-    let word = word.split_whitespace().collect::<Vec<_>>().join(" ");
+    let word = collapse_whitespace(word);
     if word.is_empty() {
         return Err("Type a word first".to_string());
+    }
+    if word.starts_with('-') {
+        return Err("Words can't start with a dash".to_string());
     }
     if word.chars().count() > MAX_WORD_CHARS {
         return Err(format!("Words can be at most {MAX_WORD_CHARS} characters"));
     }
-    if words
-        .iter()
-        .any(|w| w.word.to_lowercase() == word.to_lowercase())
-    {
+    if find_word(words, &word).is_some() {
         return Err(format!("{word} is already in your words"));
     }
     if words.len() >= MAX_WORDS {
@@ -189,21 +221,30 @@ fn set_status(app_handle: &tauri::AppHandle, trainer: &mut Trainer, status: Stat
     }
 }
 
+/// SIGTERM first: the PyInstaller bootloader passes it on to the trainer, while SIGKILL would
+/// leave the trainer running. Waiting happens off the caller's thread, which is often the UI's.
 fn stop_child(trainer: &mut Trainer) {
-    if let Some(mut child) = trainer.child.take() {
+    let Some(mut child) = trainer.child.take() else {
+        return;
+    };
+    #[cfg(unix)]
+    let _ = std::process::Command::new("kill")
+        .args(["-TERM", &child.id().to_string()])
+        .status();
+    std::thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if !matches!(child.try_wait(), Ok(None)) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
         let _ = child.kill();
         let _ = child.wait();
-    }
+    });
 }
 
-fn needs_training(vocab: &Path) -> bool {
-    let config = config::load_config();
-    let current = spec(&config.words, &read_examples(vocab));
-    trained_spec(vocab).as_ref() != Some(&current)
-}
-
-/// After any edit: a run in progress is training the old list, so it stops, and a new one
-/// starts once the edits settle
+/// After any edit: a run in progress is training the old list, so it stops
 fn changed(app_handle: &tauri::AppHandle) {
     let _ = app_handle.emit("words-changed", ());
     if !available() {
@@ -212,11 +253,19 @@ fn changed(app_handle: &tauri::AppHandle) {
     let Ok(vocab) = vocab_dir() else {
         return;
     };
-    let mut trainer = TRAINER.lock().unwrap_or_else(|e| e.into_inner());
+    let words = config::load_config().words;
+    let mut trainer = lock_trainer();
     trainer.generation += 1;
     stop_child(&mut trainer);
-    if !needs_training(&vocab) {
+    if !needs_training(&vocab, &words) {
         set_status(app_handle, &mut trainer, Status::Idle);
+        return;
+    }
+    if words.is_empty() {
+        // Nothing to learn, so drop the old head now instead of after the debounce
+        if let Err(message) = start(app_handle, &mut trainer, &vocab) {
+            set_status(app_handle, &mut trainer, Status::Failed { message });
+        }
         return;
     }
     set_status(app_handle, &mut trainer, Status::Waiting);
@@ -226,8 +275,7 @@ fn changed(app_handle: &tauri::AppHandle) {
     let handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(DEBOUNCE).await;
-        let current = TRAINER.lock().unwrap_or_else(|e| e.into_inner()).generation;
-        if current == generation {
+        if lock_trainer().generation == generation {
             train_if_needed(&handle);
         }
     });
@@ -241,12 +289,12 @@ pub fn train_if_needed(app_handle: &tauri::AppHandle) {
     let Ok(vocab) = vocab_dir() else {
         return;
     };
-    let mut trainer = TRAINER.lock().unwrap_or_else(|e| e.into_inner());
+    let mut trainer = lock_trainer();
     // Edits stop stale runs, so a run still going is training the current list
     if trainer.child.is_some() {
         return;
     }
-    if !needs_training(&vocab) {
+    if !needs_training(&vocab, &config::load_config().words) {
         set_status(app_handle, &mut trainer, Status::Idle);
         return;
     }
@@ -326,14 +374,14 @@ fn start(app_handle: &tauri::AppHandle, trainer: &mut Trainer, vocab: &Path) -> 
                     Err(line.error.unwrap_or_else(|| "Training failed".to_string()))
                 };
             } else if let Some(progress) = line.progress {
-                let mut trainer = TRAINER.lock().unwrap_or_else(|e| e.into_inner());
+                let mut trainer = lock_trainer();
                 if trainer.generation == generation {
                     set_status(&handle, &mut trainer, Status::Training { progress });
                 }
             }
         }
 
-        let mut trainer = TRAINER.lock().unwrap_or_else(|e| e.into_inner());
+        let mut trainer = lock_trainer();
         if trainer.generation != generation {
             // Superseded: a newer edit or run owns the status now
             return;
@@ -356,36 +404,16 @@ fn start(app_handle: &tauri::AppHandle, trainer: &mut Trainer, vocab: &Path) -> 
 }
 
 pub fn shutdown() {
-    let mut trainer = TRAINER.lock().unwrap_or_else(|e| e.into_inner());
-    stop_child(&mut trainer);
+    stop_child(&mut lock_trainer());
 }
 
-/// The hotkey stays out of the way while the Words page records an example
 pub fn is_recording_example() -> bool {
     RECORDING_EXAMPLE.load(Ordering::SeqCst)
 }
 
-fn add_word_to_config(word: &str) -> Result<String, String> {
-    let mut config = config::load_config();
-    let word = clean_word(word, &config.words)?;
-    config.words.push(Word {
-        word: word.clone(),
-        say_as: None,
-    });
-    config::save_config(&config)?;
-    Ok(word)
-}
-
-fn add_example(
-    vocab: &Path,
-    audio: &Path,
-    word: &str,
-    text: &str,
-    source: Source,
-) -> Result<(), String> {
+fn add_example(vocab: &Path, audio: &Path, text: &str, source: Source) -> Result<(), String> {
     let example = Example {
         id: storage::new_id(),
-        word: word.to_string(),
         text: text.trim().to_string(),
         source,
     };
@@ -402,20 +430,20 @@ pub fn get_words() -> Result<Vec<WordView>, String> {
 
 #[tauri::command]
 pub fn get_vocab_status() -> Status {
-    TRAINER
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .status
-        .clone()
+    lock_trainer().status.clone()
 }
 
 #[tauri::command]
 pub fn add_word(app_handle: tauri::AppHandle, word: String) -> Result<Vec<WordView>, String> {
-    add_word_to_config(&word)?;
+    let mut config = config::load_config();
+    let word = clean_word(&word, &config.words)?;
+    config.words.push(Word { word, say_as: None });
+    config::save_config(&config)?;
     changed(&app_handle);
     current_views()
 }
 
+/// Examples go with the word unless another listed word still uses them
 #[tauri::command]
 pub fn remove_word(app_handle: tauri::AppHandle, word: String) -> Result<Vec<WordView>, String> {
     let mut config = config::load_config();
@@ -423,9 +451,9 @@ pub fn remove_word(app_handle: tauri::AppHandle, word: String) -> Result<Vec<Wor
     config::save_config(&config)?;
 
     let vocab = vocab_dir()?;
-    let (gone, kept): (Vec<_>, Vec<_>) = read_examples(&vocab)
+    let (kept, gone): (Vec<_>, Vec<_>) = read_examples(&vocab)
         .into_iter()
-        .partition(|e| e.word == word);
+        .partition(|e| config.words.iter().any(|w| mentions(&e.text, &w.word)));
     for example in gone {
         let _ = std::fs::remove_file(example_audio(&vocab, &example.id));
     }
@@ -441,8 +469,11 @@ pub fn set_say_as(
     say_as: Option<String>,
 ) -> Result<Vec<WordView>, String> {
     let say_as = say_as
-        .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "))
+        .map(|s| collapse_whitespace(&s))
         .filter(|s| !s.is_empty() && *s != word);
+    if say_as.as_deref().is_some_and(|s| s.starts_with('-')) {
+        return Err("A pronunciation can't start with a dash".to_string());
+    }
     let mut config = config::load_config();
     let entry = config
         .words
@@ -492,7 +523,6 @@ fn stop_example_recording() -> Result<PathBuf, String> {
 #[tauri::command]
 pub fn finish_example_recording(
     app_handle: tauri::AppHandle,
-    word: String,
     text: String,
 ) -> Result<Vec<WordView>, String> {
     let audio = stop_example_recording()?;
@@ -505,32 +535,34 @@ pub fn finish_example_recording(
         let _ = std::fs::remove_file(&audio);
         return Err("That was too long. Keep examples to one short sentence.".to_string());
     }
-    add_example(&vocab_dir()?, &audio, &word, &text, Source::Recorded)?;
+    add_example(&vocab_dir()?, &audio, &text, Source::Recorded)?;
     changed(&app_handle);
     current_views()
 }
 
 #[tauri::command]
-pub fn cancel_example_recording() {
+pub fn cancel_example_recording(app_handle: tauri::AppHandle) {
     if let Ok(audio) = stop_example_recording() {
         let _ = std::fs::remove_file(audio);
+        let _ = app_handle.emit("example-recording-cancelled", ());
     }
 }
 
 #[tauri::command]
 pub fn delete_example(app_handle: tauri::AppHandle, id: String) -> Result<Vec<WordView>, String> {
     let vocab = vocab_dir()?;
+    let audio = known_example(&vocab, &id)?;
     let mut examples = read_examples(&vocab);
     examples.retain(|e| e.id != id);
     storage::write_json(&examples_index(&vocab), &examples)?;
-    let _ = std::fs::remove_file(example_audio(&vocab, &id));
+    let _ = std::fs::remove_file(audio);
     changed(&app_handle);
     current_views()
 }
 
 #[tauri::command]
 pub fn play_example(id: String) -> Result<(), String> {
-    audio::play_file(&example_audio(&vocab_dir()?, &id))
+    audio::play_file(&known_example(&vocab_dir()?, &id)?)
 }
 
 #[derive(Serialize)]
@@ -546,38 +578,32 @@ pub fn teach_from_history(
     text: String,
     words: Vec<String>,
 ) -> Result<Taught, String> {
-    let (_, audio) = history::entry(&id)?;
+    let audio = history::recording(&id)?;
     let mut config = config::load_config();
-    let mut learned = Vec::new();
+    let mut added = false;
     for word in &words {
-        let existing = config
-            .words
-            .iter()
-            .find(|w| w.word.to_lowercase() == word.trim().to_lowercase());
-        match existing {
-            Some(existing) => learned.push(existing.word.clone()),
-            None => {
-                let word = clean_word(word, &config.words)?;
-                config.words.push(Word {
-                    word: word.clone(),
-                    say_as: None,
-                });
-                learned.push(word);
-            }
+        if find_word(&config.words, word).is_none() {
+            let word = clean_word(word, &config.words)?;
+            config.words.push(Word { word, say_as: None });
+            added = true;
         }
     }
-    config::save_config(&config)?;
+    if added {
+        config::save_config(&config)?;
+    }
 
     let fits = storage::wav_seconds(&audio).is_some_and(|s| s <= MAX_EXAMPLE_SECONDS);
-    let example_saved = fits && !learned.is_empty();
-    if let (true, Some(word)) = (example_saved, learned.first()) {
+    let example_saved = fits && !words.is_empty();
+    if example_saved {
         let copy = std::env::temp_dir().join(format!("saytype-example-{}.wav", storage::new_id()));
         std::fs::copy(&audio, &copy).map_err(|e| format!("Couldn't copy the recording: {e}"))?;
-        add_example(&vocab_dir()?, &copy, word, &text, Source::History)?;
+        add_example(&vocab_dir()?, &copy, &text, Source::History)?;
     }
     history::set_text(&id, &text)?;
     let _ = app_handle.emit("history-changed", ());
-    changed(&app_handle);
+    if added || example_saved {
+        changed(&app_handle);
+    }
     Ok(Taught { example_saved })
 }
 
@@ -586,12 +612,11 @@ pub fn retry_training(app_handle: tauri::AppHandle) {
     train_if_needed(&app_handle);
 }
 
-/// Only Settings lets the user edit words, so closing it means the edits are done
+/// Only Settings lets the user edit words, so closing it means the edits are done. Closing only
+/// hides the window, so a recording the user walked away from has to be stopped here.
 pub fn settings_closed(app_handle: &tauri::AppHandle) {
-    let waiting = matches!(
-        TRAINER.lock().unwrap_or_else(|e| e.into_inner()).status,
-        Status::Waiting
-    );
+    cancel_example_recording(app_handle.clone());
+    let waiting = matches!(lock_trainer().status, Status::Waiting);
     if waiting {
         train_if_needed(app_handle);
     }
@@ -608,22 +633,54 @@ mod tests {
         }
     }
 
+    fn example(text: &str) -> Example {
+        Example {
+            id: storage::new_id(),
+            text: text.to_string(),
+            source: Source::History,
+        }
+    }
+
     #[test]
     fn clean_word_trims_and_collapses_whitespace() {
         assert_eq!(clean_word("  Mac   Book  ", &[]).unwrap(), "Mac Book");
     }
 
     #[test]
-    fn clean_word_rejects_duplicates_ignoring_case() {
+    fn clean_word_rejects_duplicates_ignoring_case_and_spacing() {
         assert!(clean_word("flatsby", &[word("Flatsby")]).is_err());
+        assert!(clean_word("mac  book", &[word("Mac Book")]).is_err());
     }
 
     #[test]
-    fn clean_word_rejects_empty_long_and_full_lists() {
+    fn clean_word_rejects_empty_dashed_long_and_full_lists() {
         assert!(clean_word("   ", &[]).is_err());
+        assert!(clean_word("-o/tmp/x", &[]).is_err());
         assert!(clean_word(&"a".repeat(MAX_WORD_CHARS + 1), &[]).is_err());
         let full: Vec<Word> = (0..MAX_WORDS).map(|i| word(&format!("w{i}"))).collect();
         assert!(clean_word("Kimeta", &full).is_err());
+    }
+
+    #[test]
+    fn mentions_matches_whole_words_ignoring_case() {
+        assert!(mentions("The FLATSBY app", "Flatsby"));
+        assert!(mentions("Saytype's settings", "Saytype"));
+        assert!(mentions("I use Mac Book daily", "Mac Book"));
+        assert!(!mentions("Saytypes everywhere", "Saytype"));
+        assert!(!mentions("pnpmx", "pnpm"));
+    }
+
+    #[test]
+    fn an_example_shows_under_every_word_it_mentions() {
+        let words = [word("Flatsby"), word("Kimeta"), word("Tauri")];
+        let examples = [example("Flatsby and Kimeta ship today")];
+
+        let counts: Vec<usize> = views(&words, &examples, None)
+            .iter()
+            .map(|v| v.examples.len())
+            .collect();
+
+        assert_eq!(counts, vec![1, 1, 0]);
     }
 
     #[test]
@@ -644,20 +701,34 @@ mod tests {
     #[test]
     fn spec_changes_with_examples_but_not_their_source() {
         let words = [word("Flatsby")];
-        let example = Example {
-            id: "1".to_string(),
-            word: "Flatsby".to_string(),
-            text: "The Flatsby app".to_string(),
-            source: Source::History,
-        };
+        let from_history = example("The Flatsby app");
         let recorded = Example {
             source: Source::Recorded,
-            ..example.clone()
+            ..from_history.clone()
         };
         assert_ne!(
             spec(&words, &[]),
-            spec(&words, std::slice::from_ref(&example))
+            spec(&words, std::slice::from_ref(&from_history))
         );
-        assert_eq!(spec(&words, &[example]), spec(&words, &[recorded]));
+        assert_eq!(spec(&words, &[from_history]), spec(&words, &[recorded]));
+    }
+
+    #[test]
+    fn a_head_written_by_the_trainer_counts_as_up_to_date() {
+        let vocab = std::env::temp_dir().join(format!("saytype-vocab-{}", storage::new_id()));
+        std::fs::create_dir_all(&vocab).unwrap();
+        let words = [word("Flatsby")];
+        assert!(needs_training(&vocab, &words));
+
+        // As Python's json.dumps writes it: its own key order, say_as as null
+        let meta = format!(
+            r#"{{"trained_at": 1.5, "spec": {{"words": [{{"say_as": null, "word": "Flatsby"}}], "examples": [], "version": "{}"}}}}"#,
+            env!("CARGO_PKG_VERSION")
+        );
+        std::fs::write(head_meta(&vocab), meta).unwrap();
+
+        assert!(!needs_training(&vocab, &words));
+        assert!(needs_training(&vocab, &[word("Flatsby"), word("Kimeta")]));
+        std::fs::remove_dir_all(vocab).unwrap();
     }
 }

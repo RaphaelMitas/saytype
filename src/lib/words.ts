@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface Example {
   id: string;
-  word: string;
   text: string;
   source: "history" | "recorded";
 }
@@ -61,8 +60,8 @@ export async function startExampleRecording(): Promise<void> {
   await invoke("start_example_recording");
 }
 
-export async function finishExampleRecording(word: string, text: string): Promise<WordView[]> {
-  return await invoke("finish_example_recording", { word, text });
+export async function finishExampleRecording(text: string): Promise<WordView[]> {
+  return await invoke("finish_example_recording", { text });
 }
 
 export async function cancelExampleRecording(): Promise<void> {

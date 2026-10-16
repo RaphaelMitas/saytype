@@ -125,7 +125,7 @@ pub struct AppConfig {
     pub preview: PreviewStyle,
     #[serde(default)]
     pub words: Vec<Word>,
-    /// Negative so configs from before History exist, and fresh installs, keep it on
+    /// Negative so configs from before History existed, and fresh installs, keep it on
     #[serde(default)]
     pub history_off: bool,
 }
@@ -193,18 +193,7 @@ pub fn load_config() -> AppConfig {
 /// Save configuration to disk
 pub fn save_config(config: &AppConfig) -> Result<(), String> {
     let path = config_path()?;
-
-    // Create parent directory if needed
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create config directory: {}", e))?;
-    }
-
-    let json = serde_json::to_string_pretty(config)
-        .map_err(|e| format!("Failed to serialize config: {}", e))?;
-
-    fs::write(&path, json).map_err(|e| format!("Failed to write config: {}", e))?;
-
+    crate::storage::write_json(&path, config)?;
     println!("[CONFIG] Saved config to {:?}", path);
     Ok(())
 }

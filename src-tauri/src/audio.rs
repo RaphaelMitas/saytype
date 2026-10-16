@@ -33,10 +33,7 @@ impl PushToTalkRecorder {
 
     pub fn start(&mut self) -> Result<(), String> {
         // Generate unique output path
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
+        let timestamp = crate::storage::now_millis();
         self.output_path = std::env::temp_dir()
             .join(format!(
                 "saytype_ptt_{}_{}.wav",

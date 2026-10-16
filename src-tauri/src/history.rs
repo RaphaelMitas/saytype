@@ -3,17 +3,24 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard};
 use tauri::Emitter;
 
 use crate::{audio, config, storage};
 
 const LIMIT: usize = 50;
 
+/// A dictation finishing can land while the History page edits the index
+static LOCK: Mutex<()> = Mutex::new(());
+
+fn lock() -> MutexGuard<'static, ()> {
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Entry {
     pub id: String,
-    /// Unix milliseconds
-    pub at: u64,
+    pub at_ms: u64,
     pub text: String,
 }
 
@@ -31,7 +38,7 @@ fn index(dir: &Path) -> PathBuf {
     dir.join("history.json")
 }
 
-pub fn audio_path(dir: &Path, id: &str) -> PathBuf {
+fn audio_path(dir: &Path, id: &str) -> PathBuf {
     dir.join(format!("{id}.wav"))
 }
 
@@ -39,11 +46,10 @@ fn entries(dir: &Path) -> Vec<Entry> {
     storage::read_json(&index(dir))
 }
 
-/// Newest first; anything past the limit is deleted along with its audio
 fn add(dir: &Path, audio: &Path, text: &str) -> Result<(), String> {
     let entry = Entry {
         id: storage::new_id(),
-        at: storage::now_millis(),
+        at_ms: storage::now_millis(),
         text: text.to_string(),
     };
     storage::move_file(audio, &audio_path(dir, &entry.id))?;
@@ -57,7 +63,11 @@ fn add(dir: &Path, audio: &Path, text: &str) -> Result<(), String> {
 
 fn remove(dir: &Path, id: &str) -> Result<(), String> {
     let mut entries = entries(dir);
+    let before = entries.len();
     entries.retain(|entry| entry.id != id);
+    if entries.len() == before {
+        return Err("That dictation is no longer in your history".to_string());
+    }
     let _ = std::fs::remove_file(audio_path(dir, id));
     storage::write_json(&index(dir), &entries)
 }
@@ -73,6 +83,7 @@ fn clear(dir: &Path) -> Result<(), String> {
 
 /// Takes over a finished dictation's recording, unless the user turned history off
 pub fn keep(app_handle: &tauri::AppHandle, audio: &Path, text: &str) {
+    let _guard = lock();
     if config::load_config().history_off {
         return;
     }
@@ -84,18 +95,19 @@ pub fn keep(app_handle: &tauri::AppHandle, audio: &Path, text: &str) {
     }
 }
 
-pub fn entry(id: &str) -> Result<(Entry, PathBuf), String> {
+pub fn recording(id: &str) -> Result<PathBuf, String> {
     let dir = dir()?;
-    let entry = entries(&dir)
-        .into_iter()
-        .find(|entry| entry.id == id)
-        .ok_or("That dictation is no longer in your history")?;
-    let audio = audio_path(&dir, id);
-    Ok((entry, audio))
+    let _guard = lock();
+    if entries(&dir).iter().any(|entry| entry.id == id) {
+        Ok(audio_path(&dir, id))
+    } else {
+        Err("That dictation is no longer in your history".to_string())
+    }
 }
 
 pub fn set_text(id: &str, text: &str) -> Result<(), String> {
     let dir = dir()?;
+    let _guard = lock();
     let mut entries = entries(&dir);
     if let Some(entry) = entries.iter_mut().find(|entry| entry.id == id) {
         entry.text = text.to_string();
@@ -105,38 +117,45 @@ pub fn set_text(id: &str, text: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_history() -> Result<History, String> {
+    let dir = dir()?;
+    let _guard = lock();
     Ok(History {
         keep: !config::load_config().history_off,
-        entries: entries(&dir()?),
+        entries: entries(&dir),
     })
 }
 
 #[tauri::command]
 pub fn set_keep_history(keep: bool) -> Result<(), String> {
+    let dir = dir()?;
+    let _guard = lock();
     let mut config = config::load_config();
     config.history_off = !keep;
     config::save_config(&config)?;
     if keep {
         Ok(())
     } else {
-        clear(&dir()?)
+        clear(&dir)
     }
 }
 
 #[tauri::command]
 pub fn delete_history_entry(id: String) -> Result<(), String> {
-    remove(&dir()?, &id)
+    let dir = dir()?;
+    let _guard = lock();
+    remove(&dir, &id)
 }
 
 #[tauri::command]
 pub fn clear_history() -> Result<(), String> {
-    clear(&dir()?)
+    let dir = dir()?;
+    let _guard = lock();
+    clear(&dir)
 }
 
 #[tauri::command]
 pub fn play_history_entry(id: String) -> Result<(), String> {
-    let (_, audio) = entry(&id)?;
-    audio::play_file(&audio)
+    audio::play_file(&recording(&id)?)
 }
 
 #[cfg(test)]
@@ -187,6 +206,7 @@ mod tests {
 
         assert_eq!(entries(&store).len(), 1);
         assert!(!audio_path(&store, &id).exists());
+        assert!(remove(&store, &id).is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
 

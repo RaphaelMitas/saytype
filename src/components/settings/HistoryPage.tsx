@@ -17,16 +17,14 @@ import {
 } from "@/lib/history";
 import type { NetworkMode } from "@/lib/network";
 
-const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
-function timeAgo(at: number): string {
-  const minutes = Math.floor((Date.now() - at) / 60_000);
+function timeAgo(atMs: number): string {
+  const minutes = Math.floor((Date.now() - atMs) / 60_000);
   if (minutes < 1) return "now";
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours} h`;
   if (hours < 48) return "yesterday";
-  return new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return new Date(atMs).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
 /** Whitespace stays its own token so the line can be put back together exactly */
@@ -135,23 +133,22 @@ function Row({
     });
   };
 
+  const learned = draft?.fixes.filter((f) => f.learn).map((f) => f.word) ?? [];
+
   const save = async () => {
     if (!draft) return;
-    const words = draft.fixes.filter((f) => f.learn).map((f) => f.word);
     try {
-      const { example_saved } = await teachFromHistory(entry.id, draft.tokens.join(""), words);
+      const { example_saved } = await teachFromHistory(entry.id, draft.tokens.join(""), learned);
       onDraftChange(null);
       onSaved(
-        words.length > 0 && !example_saved
-          ? `Added ${words.join(", ")}. This dictation is too long to use as a voice example.`
+        learned.length > 0 && !example_saved
+          ? `Added ${learned.join(", ")}. This dictation is too long to use as a voice example.`
           : null,
       );
     } catch (e) {
-      setError(errorText(e));
+      setError(String(e));
     }
   };
-
-  const learned = draft?.fixes.filter((f) => f.learn).map((f) => f.word) ?? [];
 
   return (
     <div className="group flex flex-col gap-2 border-t px-3 py-2.5 first:border-t-0">
@@ -161,7 +158,7 @@ function Row({
           size="icon-xs"
           aria-label="Play"
           className="mt-0.5 rounded-full"
-          onClick={() => playHistoryEntry(entry.id).catch((e) => setError(errorText(e)))}
+          onClick={() => playHistoryEntry(entry.id).catch((e) => setError(String(e)))}
         >
           <Play />
         </Button>
@@ -188,7 +185,7 @@ function Row({
             ),
           )}
         </p>
-        <span className="mt-0.5 text-xs text-muted-foreground">{timeAgo(entry.at)}</span>
+        <span className="mt-0.5 text-xs text-muted-foreground">{timeAgo(entry.at_ms)}</span>
         <Button
           variant="ghost"
           size="icon-xs"

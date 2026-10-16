@@ -26,8 +26,6 @@ import {
   type WordView,
 } from "@/lib/words";
 
-const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
 function StatusCard({ status, words }: { status: VocabStatus; words: WordView[] }) {
   const pending = words.filter((w) => !w.learned).length;
   const learning = pending === 1 ? "Learning 1 new word" : `Learning ${pending} new words`;
@@ -159,24 +157,36 @@ function ExampleRecorder({
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const recordingRef = useRef(false);
+  const mounted = useRef(false);
   const prompt = examplePrompt(word, attempt);
 
   // Leaving the page mid-recording would otherwise keep the microphone open
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       if (recordingRef.current) cancelExampleRecording().catch(console.error);
-    },
-    [],
-  );
+    };
+  }, []);
+
+  // Closing Settings stops the recording on the Rust side
+  useTauriEvent("example-recording-cancelled", () => {
+    recordingRef.current = false;
+    setRecording(false);
+  });
 
   const start = async () => {
     setError(null);
     try {
       await startExampleRecording();
+      if (!mounted.current) {
+        await cancelExampleRecording();
+        return;
+      }
       recordingRef.current = true;
       setRecording(true);
     } catch (e) {
-      setError(errorText(e));
+      setError(String(e));
     }
   };
 
@@ -184,10 +194,10 @@ function ExampleRecorder({
     recordingRef.current = false;
     setRecording(false);
     try {
-      onSaved(await finishExampleRecording(word, prompt));
+      onSaved(await finishExampleRecording(prompt));
       setAttempt((a) => a + 1);
     } catch (e) {
-      setError(errorText(e));
+      setError(String(e));
     }
   };
 
@@ -225,7 +235,7 @@ function WordDetail({ word, onChange }: { word: WordView; onChange: (words: Word
     card.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, []);
 
-  const report = (e: unknown) => setError(errorText(e));
+  const report = (e: unknown) => setError(String(e));
 
   const update = (action: Promise<WordView[]>) => {
     setError(null);
@@ -333,7 +343,7 @@ export function WordsPage({ mode }: { mode: NetworkMode }) {
       setDraft("");
       setSelected(next[next.length - 1]?.word ?? null);
     } catch (e) {
-      setError(errorText(e));
+      setError(String(e));
     }
   };
 
@@ -343,7 +353,7 @@ export function WordsPage({ mode }: { mode: NetworkMode }) {
       setWords(await removeWord(word));
       if (selected === word) setSelected(null);
     } catch (e) {
-      setError(errorText(e));
+      setError(String(e));
     }
   };
 

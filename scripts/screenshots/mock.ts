@@ -43,7 +43,6 @@ mockIPC(
             examples: [
               {
                 id: "1",
-                word: "Saytype",
                 text: "I pushed a new build of Saytype this morning.",
                 source: "history",
               },
@@ -62,16 +61,20 @@ mockIPC(
         return {
           keep: true,
           entries: [
-            { id: "1", at: minutesAgo(2), text: "The Flatspy app needs a new onboarding screen." },
+            {
+              id: "1",
+              at_ms: minutesAgo(2),
+              text: "The Flatspy app needs a new onboarding screen.",
+            },
             {
               id: "2",
-              at: minutesAgo(14),
+              at_ms: minutesAgo(14),
               text: "Can you check whether stateype still works in client mode?",
             },
-            { id: "3", at: minutesAgo(65), text: "Kimeta wants the new search page by Friday." },
+            { id: "3", at_ms: minutesAgo(65), text: "Kimeta wants the new search page by Friday." },
             {
               id: "4",
-              at: minutesAgo(70),
+              at_ms: minutesAgo(70),
               text: "Run pnpm install before you start the dev server.",
             },
           ],
