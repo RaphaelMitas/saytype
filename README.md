@@ -63,16 +63,13 @@ The app runs entirely offline. On first launch, wait for the ML model to load (i
 ### Build
 
 ```bash
-# Build the ML sidecar (required before first run)
-cd sidecar && ./build.sh && cd ..
-
 # Install dependencies
 pnpm install
 
-# Development (hot reload)
+# Development (hot reload, builds the ML sidecar on first run)
 pnpm tauri dev
 
-# Production build
+# Production build (needs the sidecar from a dev run or sidecar/build.sh)
 pnpm tauri build
 ```
 
