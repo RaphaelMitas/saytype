@@ -2,6 +2,7 @@ import { cn } from "cn";
 import { Mic } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
+import { Section } from "@/components/settings/Section";
 import { TranscriptBox } from "@/components/settings/TranscriptBox";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -46,13 +47,12 @@ function PreviewSetting() {
   };
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="text-xs font-semibold text-muted-foreground">Live preview</div>
+    <Section label="Live preview">
       <SegmentedControl value={style} options={PREVIEW_STYLES} onChange={handleChange} />
       <p className="text-xs text-muted-foreground">
         {PREVIEW_STYLES.find((option) => option.value === style)?.hint}
       </p>
-    </div>
+    </Section>
   );
 }
 

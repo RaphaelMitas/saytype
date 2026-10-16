@@ -2,6 +2,7 @@ import { cn } from "cn";
 import { ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
+import { Section } from "@/components/settings/Section";
 import { TranscriptBox } from "@/components/settings/TranscriptBox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -131,12 +132,6 @@ export function PostProcessingPage() {
 
   const run = (action: Promise<unknown>) => action.then(refresh).catch(console.error);
 
-  const handleSave = async () => {
-    if (!draft) return;
-    await savePrompt(draft.id, draft.name.trim(), draft.text.trim());
-    setDraft(null);
-  };
-
   const editor = (builtin: boolean) =>
     draft && (
       <Editor
@@ -144,7 +139,9 @@ export function PostProcessingPage() {
         builtin={builtin}
         onChange={setDraft}
         onCancel={() => setDraft(null)}
-        onDone={() => run(handleSave())}
+        onDone={() =>
+          run(savePrompt(draft.id, draft.name.trim(), draft.text.trim()).then(() => setDraft(null)))
+        }
       />
     );
 
@@ -205,8 +202,7 @@ export function PostProcessingPage() {
         {availability.hint && <p className="text-xs text-muted-foreground">{availability.hint}</p>}
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <div className="text-xs font-semibold text-muted-foreground">Prompt</div>
+      <Section label="Prompt">
         <div className="divide-y overflow-hidden rounded-lg border">
           {visible.map((prompt) => {
             const isSelected = prompt.id === selected.id;
@@ -287,10 +283,9 @@ export function PostProcessingPage() {
             )}
           </div>
         </div>
-      </div>
+      </Section>
 
-      <div className="flex flex-col gap-1.5">
-        <div className="text-xs font-semibold text-muted-foreground">Try it</div>
+      <Section label="Try it">
         <div className="flex gap-2">
           <Input
             placeholder="um so I think we should uh ship this on friday right"
@@ -304,7 +299,7 @@ export function PostProcessingPage() {
         </div>
         {result && <TranscriptBox label={`Result · ${result.millis} ms`} text={result.text} />}
         {error && <p className="text-xs text-destructive">{error}</p>}
-      </div>
+      </Section>
     </>
   );
 }

@@ -1,5 +1,4 @@
-//! Rewrites a transcript with a language model before it's pasted. Any failure
-//! pastes the raw transcript instead.
+//! Rewrites a transcript with a language model before it's pasted.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};

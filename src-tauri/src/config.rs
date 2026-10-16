@@ -181,8 +181,8 @@ pub fn load_config() -> AppConfig {
 }
 
 fn save_config(config: &AppConfig) -> Result<(), String> {
-    // Resolved, so the rename below updates a symlink's target instead of replacing the link
     let path = config_path()?;
+    // Resolved, so the rename below updates a symlink's target instead of replacing the link
     let path = fs::canonicalize(&path).unwrap_or(path);
 
     // Create parent directory if needed

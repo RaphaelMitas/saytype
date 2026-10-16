@@ -65,7 +65,8 @@ build still works and post-processing reports itself unsupported; CI sets
 | Module | Responsibility |
 |--------|---------------|
 | `lib.rs` | AppState, Tauri commands, app setup/builder |
-| `hotkey.rs` | Right Cmd key detection (keycode 54), AtomicBool state |
+| `hotkey/` | Hotkey detection per platform, and the record → transcribe → paste pipeline in `recording.rs` |
+| `transcriber.rs` | Routes transcription to the local sidecar or a remote server |
 | `audio.rs` | CPAL audio capture, sample rate conversion |
 | `sidecar.rs` | Sidecar spawn, JSON IPC, cross-platform binary lookup |
 | `text_insertion/` | Clipboard save/restore and ⌘V per platform, permission checks |
