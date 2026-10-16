@@ -29,9 +29,8 @@ mockIPC(
       case "get_post_processing":
         return {
           enabled: true,
-          model: "apple_intelligence",
           availability: "available",
-          selected: { id: "clean_up", name: "Clean up", text: "", builtin: true, edited: false },
+          selected_id: "clean_up",
           prompts: [
             { id: "clean_up", name: "Clean up", text: "", builtin: true, edited: false },
             { id: "polished", name: "Polished", text: "", builtin: true, edited: false },

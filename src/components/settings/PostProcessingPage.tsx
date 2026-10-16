@@ -20,7 +20,6 @@ import {
   savePrompt,
   selectPrompt,
   setPostProcessingEnabled,
-  type TestResult,
   testPostProcessing,
 } from "@/lib/postProcessing";
 
@@ -107,7 +106,7 @@ export function PostProcessingPage() {
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [sample, setSample] = useState("");
-  const [result, setResult] = useState<TestResult | null>(null);
+  const [result, setResult] = useState<{ text: string; millis: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
 
@@ -126,7 +125,8 @@ export function PostProcessingPage() {
 
   const availability = AVAILABILITY[state.availability];
   const usable = state.availability === "available" || state.availability === "model_not_ready";
-  const selected = state.selected;
+  const selected =
+    state.prompts.find((prompt) => prompt.id === state.selected_id) ?? state.prompts[0];
   const canTest =
     usable && sample.trim() !== "" && !testing && (!draft || draft.text.trim() !== "");
   const visible = expanded ? state.prompts : collapsedPrompts(state.prompts, selected.id);
@@ -150,7 +150,9 @@ export function PostProcessingPage() {
     setTesting(true);
     setError(null);
     try {
-      setResult(await testPostProcessing(draft?.text ?? selected.text, sample));
+      const started = performance.now();
+      const text = await testPostProcessing(draft?.text ?? selected.text, sample);
+      setResult({ text, millis: Math.round(performance.now() - started) });
     } catch (e) {
       setResult(null);
       setError(String(e));
@@ -181,21 +183,8 @@ export function PostProcessingPage() {
         <div className="-mx-4 border-t" />
         <div className="flex items-center gap-3">
           <div className="flex-1 text-sm font-medium">Model</div>
-          <div className="relative w-56">
-            <span
-              className={cn(
-                "pointer-events-none absolute top-1/2 left-2.5 size-2 -translate-y-1/2 rounded-full",
-                availability.dot,
-              )}
-            />
-            <select
-              defaultValue={state.model}
-              className="h-8 w-full appearance-none rounded-lg border border-input bg-transparent pr-7 pl-6 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-            >
-              <option value="apple_intelligence">Apple Intelligence</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          </div>
+          <span className={cn("size-2 rounded-full", availability.dot)} />
+          <span className="text-sm">Apple Intelligence</span>
         </div>
         {availability.hint && <p className="text-xs text-muted-foreground">{availability.hint}</p>}
       </div>

@@ -1,7 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export type Model = "apple_intelligence";
-
 export type Availability =
   | "available"
   | "device_not_eligible"
@@ -19,16 +17,10 @@ export interface Prompt {
 
 export interface PostProcessing {
   enabled: boolean;
-  model: Model;
   availability: Availability;
-  selected: Prompt;
+  selected_id: string;
   prompts: Prompt[];
   timeout_secs: number;
-}
-
-export interface TestResult {
-  text: string;
-  millis: number;
 }
 
 export async function getPostProcessing(): Promise<PostProcessing> {
@@ -51,6 +43,6 @@ export async function deletePrompt(id: string): Promise<void> {
   await invoke("delete_post_processing_prompt", { id });
 }
 
-export async function testPostProcessing(prompt: string, text: string): Promise<TestResult> {
+export async function testPostProcessing(prompt: string, text: string): Promise<string> {
   return await invoke("test_post_processing", { prompt, text });
 }

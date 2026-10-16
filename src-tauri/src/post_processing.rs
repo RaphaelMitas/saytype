@@ -75,14 +75,6 @@ Keep the speaker's words and language.",
     },
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Model {
-    #[default]
-    #[serde(other)]
-    AppleIntelligence,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomPrompt {
     pub id: String,
@@ -94,7 +86,6 @@ pub struct CustomPrompt {
 #[serde(default)]
 pub struct Settings {
     pub enabled: bool,
-    pub model: Model,
     pub prompt_id: String,
     pub custom_prompts: Vec<CustomPrompt>,
     pub edited_builtins: HashMap<String, String>,
@@ -104,7 +95,6 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             enabled: false,
-            model: Model::default(),
             prompt_id: BUILTINS[0].id.to_string(),
             custom_prompts: Vec::new(),
             edited_builtins: HashMap::new(),
@@ -235,20 +225,13 @@ mod apple {
     }
 }
 
-fn availability(model: Model) -> Availability {
-    match model {
-        Model::AppleIntelligence => apple::availability(),
-    }
-}
-
-async fn rewrite(model: Model, prompt: &str, text: &str) -> Result<String, String> {
+async fn rewrite(prompt: &str, text: &str) -> Result<String, String> {
     let instructions = format!("{FRAMING}\n\n{prompt}");
     let text = format!("<transcript>\n{text}\n</transcript>");
-    let rewritten = tauri::async_runtime::spawn_blocking(move || match model {
-        Model::AppleIntelligence => apple::respond(&instructions, &text, TIMEOUT),
-    })
-    .await
-    .map_err(|e| e.to_string())??;
+    let rewritten =
+        tauri::async_runtime::spawn_blocking(move || apple::respond(&instructions, &text, TIMEOUT))
+            .await
+            .map_err(|e| e.to_string())??;
     let rewritten = rewritten.trim();
     if rewritten.is_empty() {
         return Err("The model returned an empty rewrite".to_string());
@@ -263,7 +246,7 @@ pub async fn apply(text: &str) -> Result<String, String> {
         return Ok(text.to_string());
     }
     let started = Instant::now();
-    let rewritten = rewrite(settings.model, &settings.selected().text, text)
+    let rewritten = rewrite(&settings.selected().text, text)
         .await
         .inspect_err(|e| eprintln!("[POST] Pasting raw transcript: {}", e))?;
     println!(
@@ -277,9 +260,8 @@ pub async fn apply(text: &str) -> Result<String, String> {
 #[derive(Serialize)]
 pub struct State {
     enabled: bool,
-    model: Model,
     availability: Availability,
-    selected: Prompt,
+    selected_id: String,
     prompts: Vec<Prompt>,
     timeout_secs: u64,
 }
@@ -289,9 +271,8 @@ pub async fn get_post_processing() -> State {
     let settings = config::load_config().post_processing;
     State {
         enabled: settings.enabled,
-        model: settings.model,
-        availability: availability(settings.model),
-        selected: settings.selected(),
+        availability: apple::availability(),
+        selected_id: settings.selected().id,
         prompts: settings.prompts(),
         timeout_secs: TIMEOUT.as_secs(),
     }
@@ -350,21 +331,9 @@ pub async fn delete_post_processing_prompt(id: String) -> Result<(), String> {
     })
 }
 
-#[derive(Serialize)]
-pub struct TestResult {
-    text: String,
-    millis: u128,
-}
-
 #[tauri::command]
-pub async fn test_post_processing(prompt: String, text: String) -> Result<TestResult, String> {
-    let model = config::load_config().post_processing.model;
-    let started = Instant::now();
-    let text = rewrite(model, &prompt, &text).await?;
-    Ok(TestResult {
-        text,
-        millis: started.elapsed().as_millis(),
-    })
+pub async fn test_post_processing(prompt: String, text: String) -> Result<String, String> {
+    rewrite(&prompt, &text).await
 }
 
 #[cfg(test)]
