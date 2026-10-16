@@ -4,7 +4,7 @@ use tauri::{Emitter, Manager};
 use crate::preview::{self, Outcome};
 use crate::{audio, text_insertion, transcriber, AppState};
 
-pub(super) static HOTKEY_ACTIVE: AtomicBool = AtomicBool::new(false);
+static HOTKEY_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 pub(super) fn set_hotkey_held(app_handle: &tauri::AppHandle, held: bool) {
     if HOTKEY_ACTIVE.swap(held, Ordering::SeqCst) != held {

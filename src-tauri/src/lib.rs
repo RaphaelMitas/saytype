@@ -141,6 +141,7 @@ pub struct SetHotkeyParams {
 async fn set_hotkey(
     params: SetHotkeyParams,
     state: tauri::State<'_, AppState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<HotkeyConfig, String> {
     use config::{build_label, is_modifier_keycode, js_code_to_keycode, Modifier};
 
@@ -203,7 +204,7 @@ async fn set_hotkey(
 
     // Clear held keys when config changes
     #[cfg(any(target_os = "macos", target_os = "windows"))]
-    hotkey::clear_held_keys();
+    hotkey::clear_held_keys(&app_handle);
 
     // Save to config file
     let mut app_config = config::load_config();

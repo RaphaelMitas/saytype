@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use tauri::Manager;
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
@@ -8,7 +7,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     KBDLLHOOKSTRUCT_FLAGS, MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
 
-use super::recording::{set_hotkey_held, HOTKEY_ACTIVE};
+use super::recording::set_hotkey_held;
 use crate::AppState;
 
 // Track currently held keys (VK codes)
@@ -18,11 +17,11 @@ lazy_static::lazy_static! {
 }
 
 /// Clear the held keys set (called when hotkey config changes)
-pub fn clear_held_keys() {
+pub fn clear_held_keys(app_handle: &tauri::AppHandle) {
     if let Ok(mut held) = HELD_KEYS.lock() {
         held.clear();
     }
-    HOTKEY_ACTIVE.store(false, Ordering::SeqCst);
+    set_hotkey_held(app_handle, false);
 }
 
 /// Set up a low-level keyboard hook and run its message pump on a dedicated thread.

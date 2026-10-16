@@ -267,7 +267,10 @@ export function Overlay() {
   const [level, setLevel] = useState(0);
 
   useEffect(() => {
-    const unlistenOverlay = listen<OverlayEvent>("overlay", (event) => dispatch(event.payload));
+    const unlistenOverlay = listen<OverlayEvent>("overlay", (event) => {
+      if (event.payload.phase === "listening") setLevel(0);
+      dispatch(event.payload);
+    });
     const unlistenLevel = listen<number>("overlay-level", (event) => setLevel(event.payload));
     return () => {
       unlistenOverlay.then((fn) => fn());
