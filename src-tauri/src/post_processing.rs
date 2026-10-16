@@ -60,7 +60,9 @@ Keep the language.",
         name: "Bullet list",
         text: "Turn the transcript into a bullet list with one point per line, each starting with \"- \".
 Keep the speaker's wording and every point they made. Drop filler words and words like first or then.
-Example: \"so first buy milk and then uh call mom\" becomes \"- Buy milk\\n- Call mom\"
+Example: \"so first buy milk and then uh call mom\" becomes:
+- Buy milk
+- Call mom
 Keep the language.",
     },
     Builtin {

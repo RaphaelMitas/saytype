@@ -26,10 +26,11 @@ runs:
     - name: Setup Rust toolchain
       uses: dtolnay/rust-toolchain@stable
 
-    # Post-processing needs the FoundationModels SDK from Xcode 26 or later
+    # Post-processing needs the FoundationModels SDK from Xcode 26 or later. Real directories
+    # only: the runner's plain version names can be symlinks to a beta or release candidate.
     - name: Select newest stable Xcode
       shell: bash
-      run: sudo xcode-select -s "$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)"
+      run: sudo xcode-select -s "$(find -E /Applications -maxdepth 1 -type d -regex '.*/Xcode_[0-9.]+\.app' | sort -V | tail -1)"
 
     - name: Build sidecar
       shell: bash

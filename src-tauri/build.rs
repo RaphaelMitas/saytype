@@ -32,13 +32,11 @@ fn build_foundation_models_bridge() {
             .success()
             .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
     };
-    let sdk = xcrun(&["--sdk", "macosx", "--show-sdk-path"]);
-    let has_framework = sdk.as_ref().is_some_and(|sdk| {
+    let Some(sdk) = xcrun(&["--sdk", "macosx", "--show-sdk-path"]).filter(|sdk| {
         Path::new(sdk)
             .join("System/Library/Frameworks/FoundationModels.framework")
             .exists()
-    });
-    let (Some(sdk), true) = (sdk, has_framework) else {
+    }) else {
         let message = "macOS SDK has no FoundationModels, post-processing is disabled. Use Xcode 26 or later.";
         if env::var(REQUIRE_VAR).as_deref() == Ok("1") {
             panic!("{message}");

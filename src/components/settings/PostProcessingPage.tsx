@@ -118,7 +118,8 @@ export function PostProcessingPage() {
   const availability = AVAILABILITY[state.availability];
   const usable = state.availability === "available" || state.availability === "model_not_ready";
   const selected = state.selected;
-  const canTest = usable && sample.trim() !== "" && !testing;
+  const canTest =
+    usable && sample.trim() !== "" && !testing && (!draft || draft.text.trim() !== "");
   const visible = expanded ? state.prompts : collapsedPrompts(state.prompts, selected.id);
 
   const run = (action: Promise<unknown>) => action.then(refresh).catch(console.error);
