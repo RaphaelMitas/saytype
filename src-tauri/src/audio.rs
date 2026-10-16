@@ -159,19 +159,7 @@ impl PushToTalkRecorder {
             std::mem::take(&mut *buffer)
         };
 
-        if samples.is_empty() {
-            return Err("No audio samples recorded".to_string());
-        }
-
-        // Resample to 16kHz if needed
-        let resampled = if self.sample_rate != TARGET_SAMPLE_RATE {
-            resample_audio(&samples, self.sample_rate, TARGET_SAMPLE_RATE)?
-        } else {
-            samples
-        };
-
-        // Write to WAV file
-        write_wav_file(&self.output_path, &resampled, TARGET_SAMPLE_RATE)?;
+        write_recording(&self.output_path, &samples, self.sample_rate)?;
 
         // Verify file was created
         if !std::path::Path::new(&self.output_path).exists() {
@@ -301,6 +289,41 @@ pub fn start_recording() -> Result<(), String> {
 pub fn stop_recording() -> Result<String, String> {
     let mut recorder = PTT_RECORDER.lock().map_err(|e| e.to_string())?;
     recorder.stop()
+}
+
+/// Shares the buffer of a running recording so readers don't hold the recorder lock.
+fn live_samples() -> Option<(Arc<StdMutex<Vec<f32>>>, u32)> {
+    let recorder = PTT_RECORDER.lock().ok()?;
+    recorder.stream.as_ref()?;
+    Some((Arc::clone(&recorder.samples), recorder.sample_rate))
+}
+
+pub fn save_snapshot(path: &str) -> Result<(), String> {
+    let (samples, sample_rate) = live_samples().ok_or("No recording in progress")?;
+    let samples = samples.lock().map_err(|e| e.to_string())?.clone();
+    write_recording(path, &samples, sample_rate)
+}
+
+fn write_recording(path: &str, samples: &[f32], sample_rate: u32) -> Result<(), String> {
+    if samples.is_empty() {
+        return Err("No audio samples recorded".to_string());
+    }
+    let resampled = resample_audio(samples, sample_rate, TARGET_SAMPLE_RATE)?;
+    write_wav_file(path, &resampled, TARGET_SAMPLE_RATE)
+}
+
+/// Loudness of the last 50ms on a 0..1 scale over -40dB..-10dB, where speech mostly sits.
+pub fn recording_level() -> Option<f32> {
+    let (samples, sample_rate) = live_samples()?;
+    let samples = samples.lock().ok()?;
+    let window = (sample_rate as usize / 20).min(samples.len());
+    if window == 0 {
+        return Some(0.0);
+    }
+    let tail = &samples[samples.len() - window..];
+    let rms = (tail.iter().map(|s| s * s).sum::<f32>() / window as f32).sqrt();
+    let db = 20.0 * rms.max(1e-6).log10();
+    Some(((db + 40.0) / 30.0).clamp(0.0, 1.0))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize)]

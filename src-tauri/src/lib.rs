@@ -4,6 +4,7 @@ mod audio;
 mod config;
 mod e2e;
 mod hotkey;
+mod preview;
 mod remote;
 mod sidecar;
 mod text_insertion;
@@ -140,6 +141,7 @@ pub struct SetHotkeyParams {
 async fn set_hotkey(
     params: SetHotkeyParams,
     state: tauri::State<'_, AppState>,
+    app_handle: tauri::AppHandle,
 ) -> Result<HotkeyConfig, String> {
     use config::{build_label, is_modifier_keycode, js_code_to_keycode, Modifier};
 
@@ -202,7 +204,7 @@ async fn set_hotkey(
 
     // Clear held keys when config changes
     #[cfg(any(target_os = "macos", target_os = "windows"))]
-    hotkey::clear_held_keys();
+    hotkey::clear_held_keys(&app_handle);
 
     // Save to config file
     let mut app_config = config::load_config();
@@ -292,6 +294,18 @@ async fn set_network_config(
 }
 
 #[tauri::command]
+async fn get_preview_style() -> config::PreviewStyle {
+    config::load_config().preview
+}
+
+#[tauri::command]
+async fn set_preview_style(style: config::PreviewStyle) -> Result<(), String> {
+    let mut config = config::load_config();
+    config.preview = style;
+    config::save_config(&config)
+}
+
+#[tauri::command]
 async fn test_remote_connection(server_url: String) -> Result<bool, String> {
     remote::check_health(&server_url).await
 }
@@ -316,6 +330,10 @@ pub fn run() {
     tauri::Builder::default()
         .manage(app_state)
         .setup(|app| {
+            // A regular app's windows can't join another app's fullscreen Space, which hides the preview
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let app_handle = app.handle().clone();
             let app_config = config::load_config();
             let is_server_only = app_config.mode == config::AppMode::ServerOnly;
@@ -343,6 +361,10 @@ pub fn run() {
             }
 
             if !is_server_only && !is_e2e {
+                if let Err(e) = preview::create_window(&app_handle) {
+                    eprintln!("[PREVIEW] Failed to create overlay window: {}", e);
+                }
+
                 // Check accessibility permission before starting hotkey listener (macOS only)
                 #[cfg(target_os = "macos")]
                 if !text_insertion::check_accessibility_permission() {
@@ -411,6 +433,8 @@ pub fn run() {
             get_network_config,
             set_network_config,
             test_remote_connection,
+            get_preview_style,
+            set_preview_style,
             restart_app,
             get_local_ip,
             get_platform,

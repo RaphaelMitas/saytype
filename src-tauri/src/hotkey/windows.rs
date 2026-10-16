@@ -1,17 +1,14 @@
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, GetMessageW, SetWindowsHookExW, UnhookWindowsHookEx, HHOOK, KBDLLHOOKSTRUCT,
     KBDLLHOOKSTRUCT_FLAGS, MSG, WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
 
-use crate::{audio, text_insertion, transcriber, AppState};
-
-// Track whether the hotkey combo is currently activated
-static HOTKEY_ACTIVE: AtomicBool = AtomicBool::new(false);
+use super::recording::set_hotkey_held;
+use crate::AppState;
 
 // Track currently held keys (VK codes)
 lazy_static::lazy_static! {
@@ -19,12 +16,12 @@ lazy_static::lazy_static! {
     static ref APP_HANDLE: Mutex<Option<tauri::AppHandle>> = Mutex::new(None);
 }
 
-/// Clear the held keys set (called when hotkey config changes)
-pub fn clear_held_keys() {
+/// Called when the hotkey changes; a hotkey still down gets released as usual
+pub fn clear_held_keys(app_handle: &tauri::AppHandle) {
     if let Ok(mut held) = HELD_KEYS.lock() {
         held.clear();
     }
-    HOTKEY_ACTIVE.store(false, Ordering::SeqCst);
+    set_hotkey_held(app_handle, false);
 }
 
 /// Set up a low-level keyboard hook and run its message pump on a dedicated thread.
@@ -155,98 +152,5 @@ fn check_hotkey_state() {
         Err(_) => false,
     };
 
-    let was_active = HOTKEY_ACTIVE.load(Ordering::SeqCst);
-
-    if all_held && !was_active {
-        HOTKEY_ACTIVE.store(true, Ordering::SeqCst);
-        on_hotkey_pressed(&app_handle);
-    } else if !all_held && was_active {
-        HOTKEY_ACTIVE.store(false, Ordering::SeqCst);
-        on_hotkey_released(&app_handle);
-    }
-}
-
-fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
-    println!("[DEBUG] Hotkey pressed - starting recording");
-    let handle = app_handle.clone();
-    tauri::async_runtime::spawn(async move {
-        // Check if sidecar is ready before allowing recording
-        if let Some(state) = handle.try_state::<AppState>() {
-            let sidecar_ready = state.sidecar_ready.lock().await;
-            if !*sidecar_ready {
-                println!("[DEBUG] Hotkey pressed but sidecar not ready");
-                audio::play_busy_sound();
-                return;
-            }
-            drop(sidecar_ready);
-
-            let mut is_recording = state.is_recording.lock().await;
-            *is_recording = true;
-        }
-
-        audio::play_start_sound();
-
-        if let Err(e) = audio::start_recording() {
-            eprintln!("[DEBUG] Failed to start recording: {}", e);
-            return;
-        }
-
-        println!("[DEBUG] Recording started successfully");
-        crate::tray::set_recording_state(&handle, true);
-        let _ = handle.emit("recording-started", ());
-    });
-}
-
-fn on_hotkey_released(app_handle: &tauri::AppHandle) {
-    let handle = app_handle.clone();
-
-    tauri::async_runtime::spawn(async move {
-        if let Some(state) = handle.try_state::<AppState>() {
-            let mut is_recording = state.is_recording.lock().await;
-            *is_recording = false;
-        }
-
-        audio::play_stop_sound();
-
-        println!("[DEBUG] Stopping recording...");
-        let audio_path = match audio::stop_recording() {
-            Ok(path) => {
-                println!("[DEBUG] Recording saved to: {}", path);
-                path
-            }
-            Err(e) => {
-                eprintln!("[DEBUG] Failed to stop recording: {}", e);
-                crate::tray::set_recording_state(&handle, false);
-                return;
-            }
-        };
-
-        crate::tray::set_recording_state(&handle, false);
-        let _ = handle.emit("transcription-started", ());
-
-        println!("[DEBUG] Starting transcription...");
-        match transcriber::transcribe(&handle, &audio_path).await {
-            Ok(text) => {
-                println!("[DEBUG] Transcription result: '{}'", text);
-                if !text.is_empty() {
-                    let paste_handle = handle.clone();
-                    let paste_text = text.clone();
-                    std::thread::spawn(move || {
-                        if let Err(e) = text_insertion::insert_text(&paste_handle, &paste_text) {
-                            eprintln!("[DEBUG] Failed to insert text: {}", e);
-                        }
-                    });
-                    let _ = handle.emit("transcription-complete", text);
-                } else {
-                    println!("[DEBUG] Transcription was empty");
-                }
-            }
-            Err(e) => {
-                eprintln!("[DEBUG] Transcription failed: {}", e);
-                let _ = handle.emit("transcription-error", e);
-            }
-        }
-
-        let _ = std::fs::remove_file(&audio_path);
-    });
+    set_hotkey_held(&app_handle, all_held);
 }

@@ -6,26 +6,23 @@ use core_graphics::event::{
     CGEventType, CallbackResult, EventField,
 };
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 
-use crate::{audio, config, text_insertion, transcriber, AppState};
-
-// Track whether the hotkey combo is currently activated
-static HOTKEY_ACTIVE: AtomicBool = AtomicBool::new(false);
+use super::recording::set_hotkey_held;
+use crate::{config, AppState};
 
 // Track currently held keys
 lazy_static::lazy_static! {
     static ref HELD_KEYS: Mutex<HashSet<i64>> = Mutex::new(HashSet::new());
 }
 
-/// Clear the held keys set (called when hotkey config changes)
-pub fn clear_held_keys() {
+/// Called when the hotkey changes; a hotkey still down gets released as usual
+pub fn clear_held_keys(app_handle: &tauri::AppHandle) {
     if let Ok(mut held) = HELD_KEYS.lock() {
         held.clear();
     }
-    HOTKEY_ACTIVE.store(false, Ordering::SeqCst);
+    set_hotkey_held(app_handle, false);
 }
 
 // Store the mach port pointer for re-enabling the tap.
@@ -163,15 +160,7 @@ fn handle_event(app_handle: &tauri::AppHandle, event_type: CGEventType, event: &
         Err(_) => false,
     };
 
-    let was_active = HOTKEY_ACTIVE.load(Ordering::SeqCst);
-
-    if all_held && !was_active {
-        HOTKEY_ACTIVE.store(true, Ordering::SeqCst);
-        on_hotkey_pressed(app_handle);
-    } else if !all_held && was_active {
-        HOTKEY_ACTIVE.store(false, Ordering::SeqCst);
-        on_hotkey_released(app_handle);
-    }
+    set_hotkey_held(app_handle, all_held);
 }
 
 /// Check if a modifier key is currently pressed based on event flags
@@ -202,99 +191,4 @@ fn update_held_key(keycode: i64, pressed: bool) {
             held.remove(&keycode);
         }
     }
-}
-
-fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
-    println!("[DEBUG] Hotkey pressed - starting recording");
-    let handle = app_handle.clone();
-    tauri::async_runtime::spawn(async move {
-        // Without access macOS records silence instead of failing.
-        if audio::microphone_permission() != audio::MicPermission::Granted {
-            audio::play_busy_sound();
-            crate::tray::show_settings(&handle);
-            let _ = handle.emit("permission-required", ());
-            return;
-        }
-
-        // Check if sidecar is ready before allowing recording
-        if let Some(state) = handle.try_state::<AppState>() {
-            let sidecar_ready = state.sidecar_ready.lock().await;
-            if !*sidecar_ready {
-                println!("[DEBUG] Hotkey pressed but sidecar not ready");
-                audio::play_busy_sound();
-                return;
-            }
-            drop(sidecar_ready); // Release lock before acquiring is_recording lock
-
-            let mut is_recording = state.is_recording.lock().await;
-            *is_recording = true;
-        }
-
-        audio::play_start_sound();
-
-        if let Err(e) = audio::start_recording() {
-            eprintln!("[DEBUG] Failed to start recording: {}", e);
-            return;
-        }
-
-        println!("[DEBUG] Recording started successfully");
-        crate::tray::set_recording_state(&handle, true);
-        let _ = handle.emit("recording-started", ());
-    });
-}
-
-fn on_hotkey_released(app_handle: &tauri::AppHandle) {
-    let handle = app_handle.clone();
-
-    tauri::async_runtime::spawn(async move {
-        let was_recording = match handle.try_state::<AppState>() {
-            Some(state) => std::mem::replace(&mut *state.is_recording.lock().await, false),
-            None => true,
-        };
-        // A refused press never started recording; its busy sound already played.
-        if was_recording {
-            audio::play_stop_sound();
-        }
-
-        println!("[DEBUG] Stopping recording...");
-        let audio_path = match audio::stop_recording() {
-            Ok(path) => {
-                println!("[DEBUG] Recording saved to: {}", path);
-                path
-            }
-            Err(e) => {
-                eprintln!("[DEBUG] Failed to stop recording: {}", e);
-                crate::tray::set_recording_state(&handle, false);
-                return;
-            }
-        };
-
-        crate::tray::set_recording_state(&handle, false);
-        let _ = handle.emit("transcription-started", ());
-
-        println!("[DEBUG] Starting transcription...");
-        match transcriber::transcribe(&handle, &audio_path).await {
-            Ok(text) => {
-                println!("[DEBUG] Transcription result: '{}'", text);
-                if !text.is_empty() {
-                    let paste_handle = handle.clone();
-                    let paste_text = text.clone();
-                    std::thread::spawn(move || {
-                        if let Err(e) = text_insertion::insert_text(&paste_handle, &paste_text) {
-                            eprintln!("[DEBUG] Failed to insert text: {}", e);
-                        }
-                    });
-                    let _ = handle.emit("transcription-complete", text);
-                } else {
-                    println!("[DEBUG] Transcription was empty");
-                }
-            }
-            Err(e) => {
-                eprintln!("[DEBUG] Transcription failed: {}", e);
-                let _ = handle.emit("transcription-error", e);
-            }
-        }
-
-        let _ = std::fs::remove_file(&audio_path);
-    });
 }
