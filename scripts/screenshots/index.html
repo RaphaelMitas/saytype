@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Saytype screenshots</title>
+    <style>
+      html,
+      body {
+        background: transparent;
+      }
+      #shot {
+        display: inline-block;
+        padding: 24px 40px 56px;
+      }
+      #frame {
+        position: relative;
+        width: 640px;
+        height: 480px;
+        overflow: hidden;
+        border-radius: 12px;
+        background: var(--background);
+        box-shadow:
+          0 0 0 1px rgb(0 0 0 / 0.18),
+          0 22px 48px rgb(0 0 0 / 0.35);
+      }
+      #lights {
+        position: absolute;
+        top: 8px;
+        left: 10px;
+        z-index: 20;
+        display: flex;
+        gap: 8px;
+      }
+      #lights span {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+      @media (prefers-color-scheme: dark) {
+        #frame::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: 30;
+          border-radius: inherit;
+          box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+          pointer-events: none;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="shot">
+      <div id="frame">
+        <div id="lights">
+          <span style="background: #ff5f57"></span>
+          <span style="background: #febc2e"></span>
+          <span style="background: #28c840"></span>
+        </div>
+        <div id="root"></div>
+      </div>
+    </div>
+    <script type="module" src="./mock.ts"></script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

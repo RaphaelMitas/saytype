@@ -159,8 +159,40 @@ jobs:
           name: windows-release-nsis
           path: src-tauri/target/release/bundle/nsis/*.exe
 
+  # macOS so the UI renders in the system font, as it does in the app
+  screenshots:
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install Chromium
+        run: pnpm exec playwright install chromium
+
+      - name: Capture settings screenshots
+        run: pnpm screenshots "$RUNNER_TEMP/screenshots"
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/screenshots/*.png
+
   release:
-    needs: [build-macos, build-windows]
+    needs: [build-macos, build-windows, screenshots]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -182,6 +214,7 @@ jobs:
             artifacts/macos-release/*
             artifacts/windows-release-msi/*
             artifacts/windows-release-nsis/*
+            artifacts/screenshots/*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
