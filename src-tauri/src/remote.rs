@@ -12,12 +12,24 @@ struct TranscribeResponse {
     error: Option<String>,
 }
 
+/// reqwest's own message is just "error sending request"; the OS reason sits in the source chain.
+fn describe(error: &reqwest::Error) -> String {
+    let mut message = error.to_string();
+    let mut source = std::error::Error::source(error);
+    while let Some(cause) = source {
+        message.push_str(": ");
+        message.push_str(&cause.to_string());
+        source = cause.source();
+    }
+    message
+}
+
 /// Check if the remote transcription server is ready.
 pub async fn check_health(server_url: &str) -> Result<bool, String> {
     let url = format!("{}/health", server_url.trim_end_matches('/'));
     let resp = reqwest::get(&url)
         .await
-        .map_err(|e| format!("Failed to connect to server: {}", e))?;
+        .map_err(|e| format!("Failed to connect to server: {}", describe(&e)))?;
 
     let health: HealthResponse = resp
         .json()
@@ -41,7 +53,7 @@ pub async fn transcribe(server_url: &str, audio_path: &str) -> Result<String, St
         .body(audio_bytes)
         .send()
         .await
-        .map_err(|e| format!("Failed to send audio to server: {}", e))?;
+        .map_err(|e| format!("Failed to send audio to server: {}", describe(&e)))?;
 
     let result: TranscribeResponse = resp
         .json()

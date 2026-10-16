@@ -82,7 +82,7 @@ pub async fn initialize(app_handle: &tauri::AppHandle) -> Result<(), String> {
             let _ = app_handle.emit("sidecar-loading", ());
 
             let mut child = std::process::Command::new(&program)
-                .args(["--http", "--host", "0.0.0.0", "--port", &port.to_string()])
+                .args(["--http", "--host", "::", "--port", &port.to_string()])
                 .stdin(Stdio::null())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::inherit())
