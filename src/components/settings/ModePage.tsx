@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { Check, Copy } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,58 +30,63 @@ const MODES: { value: NetworkMode; label: string; hint: string }[] = [
   },
 ];
 
+function parsePort(text: string): number | null {
+  const port = Number(text);
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+}
+
+// null while the chosen mode is missing a URL or has an invalid port
+function toConfig(mode: NetworkMode, serverUrl: string, port: number | null): NetworkConfig | null {
+  switch (mode) {
+    case "local":
+      return { mode, server_url: null, server_port: null };
+    case "client_only":
+      return serverUrl ? { mode, server_url: serverUrl, server_port: null } : null;
+    case "server_only":
+      return port ? { mode, server_url: null, server_port: port } : null;
+  }
+}
+
 interface ModePageProps {
   platform: Platform;
   running: NetworkConfig;
-  saved: NetworkConfig;
-  onSaved: (config: NetworkConfig) => void;
   initializing: boolean;
 }
 
-export function ModePage({ platform, running, saved, onSaved, initializing }: ModePageProps) {
-  const [serverUrl, setServerUrl] = useState(saved.server_url ?? "");
+export function ModePage({ platform, running, initializing }: ModePageProps) {
+  const [mode, setMode] = useState(running.mode);
+  const [serverUrl, setServerUrl] = useState(running.server_url ?? "");
+  const [portText, setPortText] = useState(String(running.server_port ?? DEFAULT_PORT));
   const [connectionStatus, setConnectionStatus] = useState<string | null>(null);
+  const [savedWithoutRestart, setSavedWithoutRestart] = useState(false);
   const [localIp, setLocalIp] = useState<string | null>(null);
   const { copied, copy } = useCopied();
-  const port = saved.server_port ?? DEFAULT_PORT;
-  const [portText, setPortText] = useState(String(port));
-  const needsRestart =
-    saved.mode !== running.mode ||
-    saved.server_url !== running.server_url ||
-    saved.server_port !== running.server_port;
 
   useEffect(() => {
     invoke<string>("get_local_ip").then(setLocalIp).catch(console.error);
   }, []);
 
-  // A click can blur the port field, so its save may still be running when restart exits
-  const queue = useRef(Promise.resolve());
+  const port = parsePort(portText);
+  const draft = toConfig(mode, serverUrl, port);
+  const changed =
+    draft !== null &&
+    (draft.mode !== running.mode ||
+      draft.server_url !== running.server_url ||
+      draft.server_port !== running.server_port);
 
-  const enqueue = (task: () => Promise<unknown>) => {
-    queue.current = queue.current.then(task).then(
-      () => undefined,
-      (error) => console.error("Failed to save network config:", error),
-    );
+  const handleApply = async () => {
+    if (!draft) return;
+    try {
+      await setNetworkConfig(draft);
+      if (!(await restartApp())) setSavedWithoutRestart(true);
+    } catch (error) {
+      console.error("Failed to save network config:", error);
+    }
   };
-
-  const save = (config: NetworkConfig, restart: boolean) =>
-    enqueue(async () => {
-      await setNetworkConfig(config);
-      onSaved(config);
-      if (restart) await restartApp();
-    });
 
   const handleModeChange = (value: string) => {
     const next = MODES.find((m) => m.value === value);
-    if (!next || next.value === saved.mode) return;
-    save(
-      {
-        mode: next.value,
-        server_url: next.value === "client_only" ? serverUrl || null : null,
-        server_port: next.value === "server_only" ? port : null,
-      },
-      true,
-    );
+    if (next) setMode(next.value);
   };
 
   const handleTestConnection = async () => {
@@ -91,15 +96,6 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
       setConnectionStatus(ready ? "Connected, server ready" : "Connected, server still loading");
     } catch (error) {
       setConnectionStatus(`Failed: ${error}`);
-    }
-  };
-
-  const commitPort = () => {
-    const value = Number(portText);
-    if (!Number.isInteger(value) || value < 1 || value > 65535) {
-      setPortText(String(port));
-    } else if (value !== port) {
-      save({ ...saved, server_port: value }, false);
     }
   };
 
@@ -115,14 +111,14 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
         description={
           platform === "windows"
             ? "Saytype on Windows connects to a Saytype server."
-            : "Where transcription runs. Changing it restarts Saytype."
+            : "Where transcription runs. Applying a change restarts Saytype."
         }
       />
 
       {platform !== "windows" && (
         <ToggleGroup
           type="single"
-          value={saved.mode}
+          value={mode}
           onValueChange={handleModeChange}
           spacing={0}
           className="grid w-full grid-cols-3 gap-0.5 rounded-lg bg-muted p-0.5"
@@ -140,16 +136,7 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
         </ToggleGroup>
       )}
 
-      {needsRestart && (
-        <div className="flex items-center gap-2 rounded-lg bg-warning/10 py-1.5 pr-1.5 pl-3 text-xs text-warning">
-          <span className="flex-1">Saved. Restart Saytype to apply.</span>
-          <Button variant="outline" size="xs" onClick={() => enqueue(restartApp)}>
-            Restart
-          </Button>
-        </div>
-      )}
-
-      {saved.mode === "client_only" && (
+      {mode === "client_only" && (
         <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="server-url">Server URL</Label>
@@ -170,20 +157,11 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
             >
               Test
             </Button>
-            <Button
-              size="sm"
-              disabled={!serverUrl}
-              onClick={() =>
-                save({ mode: saved.mode, server_url: serverUrl, server_port: null }, true)
-              }
-            >
-              Apply
-            </Button>
           </div>
         </div>
       )}
 
-      {saved.mode === "server_only" && (
+      {mode === "server_only" && (
         <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="server-port">Port</Label>
@@ -193,9 +171,8 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
               min={1}
               max={65535}
               value={portText}
+              aria-invalid={port === null}
               onChange={(e) => setPortText(e.target.value)}
-              onBlur={commitPort}
-              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
             />
           </div>
           {!initializing && shareUrl && (
@@ -211,11 +188,16 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
         </div>
       )}
 
-      {platform !== "windows" && (
-        <p className="text-xs text-muted-foreground">
-          {MODES.find((m) => m.value === saved.mode)?.hint}
+      <div className="flex items-center gap-3">
+        <p className="flex-1 text-xs text-muted-foreground">
+          {savedWithoutRestart
+            ? "Saved. Restart Saytype to apply."
+            : MODES.find((m) => m.value === mode)?.hint}
         </p>
-      )}
+        <Button size="sm" disabled={!changed} onClick={handleApply}>
+          Apply
+        </Button>
+      </div>
     </>
   );
 }

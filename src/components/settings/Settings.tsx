@@ -41,7 +41,6 @@ export function Settings({ platform, runningNetwork, hotkey, onHotkeyChange }: S
   const recording = useRecording();
   const selfTest = useSelfTest();
   const { permissions, refresh, requestMicrophone } = usePermissions();
-  const [savedNetwork, setSavedNetwork] = useState(runningNetwork);
 
   const serverOnly = runningNetwork.mode === "server_only";
   const missing = permissions && !serverOnly ? missingPermissions(permissions, platform) : [];
@@ -94,8 +93,6 @@ export function Settings({ platform, runningNetwork, hotkey, onHotkeyChange }: S
           <ModePage
             platform={platform}
             running={runningNetwork}
-            saved={savedNetwork}
-            onSaved={setSavedNetwork}
             initializing={recording.state === "initializing"}
           />
         )}
