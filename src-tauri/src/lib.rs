@@ -329,6 +329,10 @@ pub fn run() {
     tauri::Builder::default()
         .manage(app_state)
         .setup(|app| {
+            // A regular app's windows can't join another app's fullscreen Space, which hid the preview
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let app_handle = app.handle().clone();
             let app_config = config::load_config();
             let is_server_only = app_config.mode == config::AppMode::ServerOnly;
