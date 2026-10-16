@@ -122,6 +122,8 @@ pub async fn start(app_handle: &tauri::AppHandle) -> Result<(), String> {
 
     // Spawn with stdio pipes (inherit stderr so we see Python debug output)
     let mut child = std::process::Command::new(&program)
+        .arg("--vocab-dir")
+        .arg(crate::vocab::vocab_dir()?)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, Manager};
 
 use crate::preview::{self, Outcome};
-use crate::{audio, text_insertion, transcriber, AppState};
+use crate::{audio, history, text_insertion, transcriber, vocab, AppState};
 
 static HOTKEY_ACTIVE: AtomicBool = AtomicBool::new(false);
 
@@ -20,6 +20,11 @@ fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
     println!("[DEBUG] Hotkey pressed - starting recording");
     let handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
+        if vocab::is_recording_example() {
+            audio::play_busy_sound();
+            return;
+        }
+
         // Without access macOS records silence instead of failing.
         if audio::microphone_permission() != audio::MicPermission::Granted {
             audio::play_busy_sound();
@@ -62,6 +67,10 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
     let handle = app_handle.clone();
 
     tauri::async_runtime::spawn(async move {
+        // The press was refused, and stopping now would cut off the example
+        if vocab::is_recording_example() {
+            return;
+        }
         let Some(state) = handle.try_state::<AppState>() else {
             return;
         };
@@ -108,6 +117,7 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
                             preview::finish(&paste_handle, preview_session, Outcome::Failed(e));
                         }
                     });
+                    history::keep(&handle, std::path::Path::new(&audio_path), &text);
                     let _ = handle.emit("transcription-complete", text);
                 } else {
                     println!("[DEBUG] Transcription was empty");

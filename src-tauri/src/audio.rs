@@ -400,6 +400,49 @@ fn ask_for_microphone() -> tokio::sync::mpsc::UnboundedReceiver<()> {
     rx
 }
 
+#[cfg(target_os = "macos")]
+static PLAYBACK: StdMutex<Option<std::process::Child>> = StdMutex::new(None);
+
+/// One sound at a time: a new clip or word cuts off the one still playing
+#[cfg(target_os = "macos")]
+fn play(command: &mut std::process::Command) -> Result<(), String> {
+    let mut playback = PLAYBACK.lock().map_err(|e| e.to_string())?;
+    if let Some(mut previous) = playback.take() {
+        let _ = previous.kill();
+        let _ = previous.wait();
+    }
+    *playback = Some(
+        command
+            .spawn()
+            .map_err(|e| format!("Failed to play: {e}"))?,
+    );
+    Ok(())
+}
+
+pub fn play_file(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        play(std::process::Command::new("afplay").arg(path))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        Err("Playback is only available on macOS".to_string())
+    }
+}
+
+pub fn speak(text: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        play(std::process::Command::new("say").arg("--").arg(text))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = text;
+        Err("Speech is only available on macOS".to_string())
+    }
+}
+
 /// Play a sound when recording starts
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn play_start_sound() {

@@ -123,29 +123,42 @@ pub struct AppConfig {
     pub server_port: Option<u16>,
     #[serde(default)]
     pub preview: PreviewStyle,
+    #[serde(default)]
+    pub words: Vec<Word>,
+    /// Negative so configs from before History exist, and fresh installs, keep it on
+    #[serde(default)]
+    pub history_off: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Word {
+    pub word: String,
+    #[serde(default)]
+    pub say_as: Option<String>,
 }
 
 fn default_server_port() -> Option<u16> {
     Some(8765)
 }
 
-/// Get the config file path
-fn config_path() -> Result<PathBuf, String> {
+pub fn data_dir() -> Result<PathBuf, String> {
     #[cfg(target_os = "windows")]
     {
         let appdata = std::env::var("APPDATA").map_err(|_| "APPDATA not set")?;
-        let config_dir = PathBuf::from(appdata).join("saytype");
-        Ok(config_dir.join("config.json"))
+        Ok(PathBuf::from(appdata).join("saytype"))
     }
     #[cfg(not(target_os = "windows"))]
     {
         let home = std::env::var("HOME").map_err(|_| "HOME not set")?;
-        let config_dir = PathBuf::from(home)
+        Ok(PathBuf::from(home)
             .join("Library")
             .join("Application Support")
-            .join("com.raphaelmitas.saytype");
-        Ok(config_dir.join("config.json"))
+            .join("com.raphaelmitas.saytype"))
     }
+}
+
+fn config_path() -> Result<PathBuf, String> {
+    Ok(data_dir()?.join("config.json"))
 }
 
 /// Load configuration from disk

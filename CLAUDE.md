@@ -64,6 +64,8 @@ No external dependencies required - uses native CPAL for audio recording.
 | `text_insertion/` | Clipboard save/restore and ⌘V per platform, permission checks |
 | `tray.rs` | Menu bar icon, recording state indicator |
 | `updater.rs` | Background update check/download from GitHub releases, install on restart or quit |
+| `vocab.rs` | Custom words, the user's voice examples, background training via `transcribe-server --train` |
+| `history.rs` | Last 50 dictations with audio, the source of voice examples |
 
 ### State Management
 
@@ -104,9 +106,12 @@ pnpm screenshots <dir>  # Settings screenshots against a mocked backend, as atta
 Both E2E suites transcribe `tests/fixtures/hello.wav` (generated with macOS
 `say`) and assert the transcript, ignoring case and punctuation.
 
-- `tests/e2e/sidecar_e2e.py` runs the *frozen* sidecar binary in all three modes
-  the Rust side speaks: `--transcribe`, stdin/stdout IPC, and `--http`. This is
-  where PyInstaller breakage surfaces.
+- `tests/e2e/sidecar_e2e.py` runs the *frozen* sidecar binary in every mode
+  the Rust side speaks: `--transcribe`, stdin/stdout IPC, `--http`, and
+  `--train` followed by IPC with `--vocab-dir`. This is where PyInstaller
+  breakage surfaces.
+- `tests/test_tdt_loss.py` checks the training loss against brute force; run it
+  with `sidecar/venv/bin/python`.
 - `tests/e2e/app_e2e.sh` runs the real bundled app via the headless harness in
   `src-tauri/src/e2e.rs`, covering sidecar lookup inside `Saytype.app`, spawn,
   the ready handshake, and the Rust ↔ Python round trip.
@@ -114,6 +119,10 @@ Both E2E suites transcribe `tests/fixtures/hello.wav` (generated with macOS
 The headless harness is driven by env vars — `SAYTYPE_E2E_AUDIO` enables it,
 `SAYTYPE_E2E_EXPECT` asserts the transcript, `SAYTYPE_E2E_MODE` pins local vs
 client vs server, `SAYTYPE_E2E_TIMEOUT_SECS` bounds the run.
+
+Custom words train the decoder and joint on `say` speech of each word, cached
+per word under `vocab/cache`, and the serving sidecar swaps the resulting
+`vocab/head.safetensors` in before each transcription.
 
 Not covered automatically: the hotkey capture and clipboard-paste layers need
 TCC permissions and a real input device, so they stay manual — test via the
