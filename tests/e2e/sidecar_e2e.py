@@ -313,18 +313,21 @@ def test_train_mode(binary: Path, fixture: Path, expected: str) -> None:
             [str(binary), "--vocab-dir", str(vocab)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=None,
+            stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
         )
         try:
             stdout = LineReader(serve.stdout, "stdout")
+            # A head that can't be loaded falls back to the base model, which transcribes fine
+            stderr = LineReader(serve.stderr, "stderr")
             assert serve.stdin is not None
             stdout.wait_for('"ready"', READY_TIMEOUT)
             serve.stdin.write(
                 json.dumps({"command": "transcribe", "audio_path": str(fixture)}) + "\n"
             )
             serve.stdin.flush()
+            stderr.wait_for("[VOCAB] Applied head", TRANSCRIBE_TIMEOUT)
             result = next_json(stdout, TRANSCRIBE_TIMEOUT)
             if not result.get("success"):
                 raise TestFailure(f"transcribe with trained head failed: {result.get('error')}")

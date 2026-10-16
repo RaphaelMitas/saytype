@@ -431,18 +431,16 @@ pub fn run() {
             let e2e_audio = e2e::audio_path();
             tauri::async_runtime::spawn(async move {
                 println!("[TRANSCRIBER] Initializing transcription backend...");
-                match transcriber::initialize(&handle_clone).await {
-                    // After the sidecar, so the two model loads don't compete at launch
-                    Ok(()) => vocab::train_if_needed(&handle_clone),
-                    Err(e) => {
-                        eprintln!("[TRANSCRIBER] Failed to initialize: {}", e);
+                if let Err(e) = transcriber::initialize(&handle_clone).await {
+                    eprintln!("[TRANSCRIBER] Failed to initialize: {}", e);
                     let _ = handle_clone.emit("sidecar-error", e.clone());
-                        if e2e_audio.is_some() {
-                            eprintln!("[E2E] FAIL: backend init error: {}", e);
-                            e2e::finish(1);
-                        }
+                    if e2e_audio.is_some() {
+                        eprintln!("[E2E] FAIL: backend init error: {}", e);
+                        e2e::finish(1);
                     }
                 }
+                // After the sidecar, so the two model loads don't compete at launch
+                vocab::train_if_needed(&handle_clone);
 
                 if let Some(audio_path) = e2e_audio {
                     e2e::run(&handle_clone, &audio_path).await;

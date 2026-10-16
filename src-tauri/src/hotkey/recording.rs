@@ -67,20 +67,18 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
     let handle = app_handle.clone();
 
     tauri::async_runtime::spawn(async move {
-        // The press was refused, and stopping now would cut off the example
-        if vocab::is_recording_example() {
-            return;
-        }
         let Some(state) = handle.try_state::<AppState>() else {
             return;
         };
         // Held until the recorder stops, so a quick second press can't start in between
         let mut is_recording = state.is_recording.lock().await;
         let was_recording = std::mem::replace(&mut *is_recording, false);
-        // A refused press never started recording; its busy sound already played.
-        if was_recording {
-            audio::play_stop_sound();
+        // A refused press never started recording, and its busy sound already played. Stopping
+        // anyway would cut off an example the Words page is recording.
+        if !was_recording {
+            return;
         }
+        audio::play_stop_sound();
 
         let preview_session = preview::stop(&handle);
 

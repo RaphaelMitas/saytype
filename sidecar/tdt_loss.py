@@ -1,7 +1,7 @@
 """TDT (token-and-duration transducer) loss in MLX, matching NeMo's tdt loss with sigma = omega = 0.
 
 alpha[t, u] is the log prob of having emitted the first u labels and standing at frame t.
-Blanks advance 1..4 frames; labels advance 0..4 frames, so within one frame the u axis is a
+Blanks advance d > 0 frames; labels advance d >= 0 frames, so within one frame the u axis is a
 linear recurrence, solved in closed form with logcumsumexp. The loop runs over frames only.
 """
 

@@ -26,47 +26,55 @@ import {
   type WordView,
 } from "@/lib/words";
 
-function StatusCard({ status, words }: { status: VocabStatus; words: WordView[] }) {
+interface CardView {
+  title: string;
+  detail: string;
+  dot?: string;
+  busy?: boolean;
+  progress?: number;
+  retry?: boolean;
+}
+
+function statusView(status: VocabStatus, words: WordView[]): CardView {
   const pending = words.filter((w) => !w.learned).length;
   const learning = pending === 1 ? "Learning 1 new word" : `Learning ${pending} new words`;
+  switch (status.state) {
+    case "waiting":
+      return {
+        busy: true,
+        title: "About to learn your changes",
+        detail: "Starts shortly, or right away when you close Settings.",
+      };
+    case "training":
+      return {
+        busy: true,
+        title: pending > 0 ? learning : "Learning from your examples",
+        detail: "Dictation keeps working, a bit slower until this finishes.",
+        progress: status.progress,
+      };
+    case "failed":
+      return {
+        dot: "bg-destructive",
+        title: "Couldn't learn your words",
+        detail: `${status.message.replace(/\.$/, "")}. The last learned words still apply.`,
+        retry: true,
+      };
+    default:
+      return words.length === 0
+        ? {
+            dot: "bg-muted-foreground",
+            title: "No words yet",
+            detail: "Saytype learns each word on this Mac in about a minute.",
+          }
+        : {
+            dot: "bg-success",
+            title: "Up to date",
+            detail: words.length === 1 ? "1 word" : `${words.length} words`,
+          };
+  }
+}
 
-  const view = (() => {
-    switch (status.state) {
-      case "waiting":
-        return {
-          busy: true,
-          title: "About to learn your changes",
-          detail: "Starts in a few seconds, or when you close Settings.",
-        };
-      case "training":
-        return {
-          busy: true,
-          title: pending > 0 ? learning : "Learning from your examples",
-          detail: "Dictation keeps working, a bit slower until this finishes.",
-          progress: status.progress,
-        };
-      case "failed":
-        return {
-          dot: "bg-destructive",
-          title: "Couldn't learn your words",
-          detail: `${status.message.replace(/\.$/, "")}. The last learned words still apply.`,
-          retry: true,
-        };
-      default:
-        return words.length === 0
-          ? {
-              dot: "bg-muted-foreground",
-              title: "No words yet",
-              detail: "Saytype learns each word on this Mac in about a minute.",
-            }
-          : {
-              dot: "bg-success",
-              title: "Up to date",
-              detail: words.length === 1 ? "1 word" : `${words.length} words`,
-            };
-    }
-  })();
-
+function StatusCard({ view }: { view: CardView }) {
   return (
     <div className="flex flex-col gap-2.5 rounded-xl border bg-card px-4 py-3">
       <div className="flex items-center gap-3">
@@ -365,15 +373,13 @@ export function WordsPage({ mode }: { mode: NetworkMode }) {
     return (
       <>
         {header}
-        <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
-          <span className="size-2 shrink-0 rounded-full bg-primary" />
-          <div>
-            <div className="text-sm font-semibold">Your server's words apply</div>
-            <div className="text-xs text-muted-foreground">
-              Transcription runs on your Saytype server, so words are added there.
-            </div>
-          </div>
-        </div>
+        <StatusCard
+          view={{
+            dot: "bg-primary",
+            title: "Your server's words apply",
+            detail: "Transcription runs on your Saytype server, so words are added there.",
+          }}
+        />
       </>
     );
   }
@@ -386,7 +392,7 @@ export function WordsPage({ mode }: { mode: NetworkMode }) {
   return (
     <>
       {header}
-      <StatusCard status={status} words={words} />
+      <StatusCard view={statusView(status, words)} />
 
       <form onSubmit={add} className="flex flex-col gap-1.5">
         <div className="flex gap-2">

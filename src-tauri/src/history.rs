@@ -95,14 +95,22 @@ pub fn keep(app_handle: &tauri::AppHandle, audio: &Path, text: &str) {
     }
 }
 
-pub fn recording(id: &str) -> Result<PathBuf, String> {
-    let dir = dir()?;
-    let _guard = lock();
-    if entries(&dir).iter().any(|entry| entry.id == id) {
-        Ok(audio_path(&dir, id))
+/// Ids come from the frontend, so only ones in the index become paths
+fn known_recording(dir: &Path, id: &str) -> Result<PathBuf, String> {
+    if entries(dir).iter().any(|entry| entry.id == id) {
+        Ok(audio_path(dir, id))
     } else {
         Err("That dictation is no longer in your history".to_string())
     }
+}
+
+/// Under the lock, so a dictation landing meanwhile can't evict the entry mid-copy
+pub fn copy_recording(id: &str, to: &Path) -> Result<(), String> {
+    let dir = dir()?;
+    let _guard = lock();
+    std::fs::copy(known_recording(&dir, id)?, to)
+        .map(|_| ())
+        .map_err(|e| format!("Couldn't copy the recording: {e}"))
 }
 
 pub fn set_text(id: &str, text: &str) -> Result<(), String> {
@@ -155,7 +163,12 @@ pub fn clear_history() -> Result<(), String> {
 
 #[tauri::command]
 pub fn play_history_entry(id: String) -> Result<(), String> {
-    audio::play_file(&recording(&id)?)
+    let dir = dir()?;
+    let audio = {
+        let _guard = lock();
+        known_recording(&dir, &id)?
+    };
+    audio::play_file(&audio)
 }
 
 #[cfg(test)]

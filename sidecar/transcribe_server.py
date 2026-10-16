@@ -61,6 +61,8 @@ class VocabHead:
                 weights = self.base
         model.update(tree_unflatten(list(weights.items())))
         self.loaded = version
+        if weights is not self.base:
+            sys.stderr.write(f"[VOCAB] Applied head {self.path}\n")
 
 
 _vocab_head: VocabHead | None = None

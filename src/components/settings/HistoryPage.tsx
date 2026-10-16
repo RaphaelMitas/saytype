@@ -51,16 +51,14 @@ interface Draft {
 }
 
 function FixBar({
-  draft,
+  original,
   onFix,
   onCancel,
 }: {
-  draft: Draft;
+  original: string;
   onFix: (replacement: string, learn: boolean) => void;
   onCancel: () => void;
 }) {
-  const [start, end] = draft.selection ?? [0, 0];
-  const original = trimPunctuation(draft.tokens.slice(start, end + 1).join("")).core;
   const [replacement, setReplacement] = useState(original);
   const [learn, setLearn] = useState(true);
 
@@ -115,15 +113,14 @@ function Row({
   const [error, setError] = useState<string | null>(null);
   const tokens = draft?.tokens ?? tokenize(entry.text);
   const [start, end] = draft?.selection ?? [-1, -1];
+  const selected = draft?.selection ? trimPunctuation(tokens.slice(start, end + 1).join("")) : null;
 
   const applyFix = (replacement: string, learn: boolean) => {
-    if (!draft?.selection) return;
-    const [from, to] = draft.selection;
-    const { prefix, suffix } = trimPunctuation(draft.tokens.slice(from, to + 1).join(""));
+    if (!draft || !selected) return;
     const text = [
-      ...draft.tokens.slice(0, from),
-      prefix + replacement + suffix,
-      ...draft.tokens.slice(to + 1),
+      ...draft.tokens.slice(0, start),
+      selected.prefix + replacement + selected.suffix,
+      ...draft.tokens.slice(end + 1),
     ].join("");
     onDraftChange({
       ...draft,
@@ -133,7 +130,12 @@ function Row({
     });
   };
 
-  const learned = draft?.fixes.filter((f) => f.learn).map((f) => f.word) ?? [];
+  // A token fixed twice only teaches the spelling the line ended up with
+  const learned = [
+    ...new Set(
+      draft?.fixes.filter((f) => f.learn && tokens.join("").includes(f.word)).map((f) => f.word),
+    ),
+  ];
 
   const save = async () => {
     if (!draft) return;
@@ -197,10 +199,10 @@ function Row({
         </Button>
       </div>
 
-      {draft?.selection && (
+      {draft && selected && (
         <FixBar
           key={`${start}-${end}`}
-          draft={draft}
+          original={selected.core}
           onFix={applyFix}
           onCancel={() => onDraftChange({ ...draft, selection: null })}
         />

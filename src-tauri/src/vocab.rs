@@ -3,8 +3,8 @@
 //!
 //! Training runs the sidecar binary with `--train` as its own process, so dictation keeps
 //! working meanwhile. It writes vocab/head.safetensors, which the serving sidecar swaps in before
-//! its next transcription. head.json records what that head was trained on; whenever the words
-//! or examples differ from it, the head is out of date and a new run gets scheduled.
+//! its next transcription. head.json records what that head was trained on; whenever the words,
+//! examples or app version differ from it, the head is out of date and a new run gets scheduled.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -68,7 +68,7 @@ struct Trainer {
     status: Status,
     /// Bumped by every edit and run, so stale debounce timers and finished runs stand down
     generation: u64,
-    child: Option<Child>,
+    child: Option<(Child, Instant)>,
 }
 
 static TRAINER: Mutex<Trainer> = Mutex::new(Trainer {
@@ -138,7 +138,10 @@ fn trained_spec(vocab: &Path) -> Option<Value> {
 }
 
 fn needs_training(vocab: &Path, words: &[Word]) -> bool {
-    trained_spec(vocab) != Some(spec(words, &read_examples(vocab)))
+    match trained_spec(vocab) {
+        None => !words.is_empty(),
+        Some(trained) => trained != spec(words, &read_examples(vocab)),
+    }
 }
 
 fn collapse_whitespace(text: &str) -> String {
@@ -221,17 +224,25 @@ fn set_status(app_handle: &tauri::AppHandle, trainer: &mut Trainer, status: Stat
     }
 }
 
-/// SIGTERM first: the PyInstaller bootloader passes it on to the trainer, while SIGKILL would
-/// leave the trainer running. Waiting happens off the caller's thread, which is often the UI's.
-fn stop_child(trainer: &mut Trainer) {
-    let Some(mut child) = trainer.child.take() else {
-        return;
-    };
+/// SIGTERM, since the PyInstaller bootloader passes it on to the trainer while SIGKILL would leave
+/// the trainer running. Not in the first moments, when the bootloader is still unpacking and
+/// would leave its temp dir behind.
+fn terminate(child: &Child, spawned: Instant) {
+    let unpacked = spawned + Duration::from_millis(1500);
+    std::thread::sleep(unpacked.saturating_duration_since(Instant::now()));
     #[cfg(unix)]
     let _ = std::process::Command::new("kill")
         .args(["-TERM", &child.id().to_string()])
         .status();
+}
+
+/// Waits off the caller's thread, which is often the UI's
+fn stop_child(trainer: &mut Trainer) {
+    let Some((mut child, spawned)) = trainer.child.take() else {
+        return;
+    };
     std::thread::spawn(move || {
+        terminate(&child, spawned);
         let deadline = Instant::now() + Duration::from_secs(5);
         while Instant::now() < deadline {
             if !matches!(child.try_wait(), Ok(None)) {
@@ -257,15 +268,10 @@ fn changed(app_handle: &tauri::AppHandle) {
     let mut trainer = lock_trainer();
     trainer.generation += 1;
     stop_child(&mut trainer);
-    if !needs_training(&vocab, &words) {
-        set_status(app_handle, &mut trainer, Status::Idle);
-        return;
-    }
-    if words.is_empty() {
-        // Nothing to learn, so drop the old head now instead of after the debounce
-        if let Err(message) = start(app_handle, &mut trainer, &vocab) {
-            set_status(app_handle, &mut trainer, Status::Failed { message });
-        }
+    // An empty list has nothing to learn, so its head goes now instead of after the debounce
+    if words.is_empty() || !needs_training(&vocab, &words) {
+        drop(trainer);
+        train_if_needed(app_handle);
         return;
     }
     set_status(app_handle, &mut trainer, Status::Waiting);
@@ -281,7 +287,6 @@ fn changed(app_handle: &tauri::AppHandle) {
     });
 }
 
-/// At launch and when Settings closes: no point waiting out the debounce then
 pub fn train_if_needed(app_handle: &tauri::AppHandle) {
     if !available() {
         return;
@@ -311,7 +316,6 @@ struct TrainerLine {
 }
 
 fn start(app_handle: &tauri::AppHandle, trainer: &mut Trainer, vocab: &Path) -> Result<(), String> {
-    stop_child(trainer);
     trainer.generation += 1;
     let generation = trainer.generation;
 
@@ -357,7 +361,7 @@ fn start(app_handle: &tauri::AppHandle, trainer: &mut Trainer, vocab: &Path) -> 
         .stdout
         .take()
         .ok_or("Couldn't read training progress")?;
-    trainer.child = Some(child);
+    trainer.child = Some((child, Instant::now()));
     set_status(app_handle, trainer, Status::Training { progress: 0.0 });
 
     let handle = app_handle.clone();
@@ -383,7 +387,13 @@ fn start(app_handle: &tauri::AppHandle, trainer: &mut Trainer, vocab: &Path) -> 
 
         let mut trainer = lock_trainer();
         if trainer.generation != generation {
-            // Superseded: a newer edit or run owns the status now
+            // Superseded, but if it wrote its head after being stopped and nothing newer is
+            // running, that head is stale; checking again retrains or removes it
+            let idle = trainer.child.is_none() && trainer.status == Status::Idle;
+            drop(trainer);
+            if idle {
+                train_if_needed(&handle);
+            }
             return;
         }
         stop_child(&mut trainer);
@@ -404,7 +414,9 @@ fn start(app_handle: &tauri::AppHandle, trainer: &mut Trainer, vocab: &Path) -> 
 }
 
 pub fn shutdown() {
-    stop_child(&mut lock_trainer());
+    if let Some((child, spawned)) = lock_trainer().child.take() {
+        terminate(&child, spawned);
+    }
 }
 
 pub fn is_recording_example() -> bool {
@@ -430,7 +442,16 @@ pub fn get_words() -> Result<Vec<WordView>, String> {
 
 #[tauri::command]
 pub fn get_vocab_status() -> Status {
-    lock_trainer().status.clone()
+    let trainer = lock_trainer();
+    let outdated = || {
+        available() && vocab_dir().is_ok_and(|v| needs_training(&v, &config::load_config().words))
+    };
+    // Before the launch run starts, e.g. after an update, an outdated head isn't up to date
+    if trainer.status == Status::Idle && trainer.child.is_none() && outdated() {
+        Status::Waiting
+    } else {
+        trainer.status.clone()
+    }
 }
 
 #[tauri::command]
@@ -513,11 +534,14 @@ pub async fn start_example_recording(state: tauri::State<'_, AppState>) -> Resul
     audio::start_recording().inspect_err(|_| RECORDING_EXAMPLE.store(false, Ordering::SeqCst))
 }
 
+/// The flag clears only once the recorder stopped, so a hotkey press can't restart it first
 fn stop_example_recording() -> Result<PathBuf, String> {
-    if !RECORDING_EXAMPLE.swap(false, Ordering::SeqCst) {
+    if !RECORDING_EXAMPLE.load(Ordering::SeqCst) {
         return Err("Not recording".to_string());
     }
-    audio::stop_recording().map(PathBuf::from)
+    let audio = audio::stop_recording().map(PathBuf::from);
+    RECORDING_EXAMPLE.store(false, Ordering::SeqCst);
+    audio
 }
 
 #[tauri::command]
@@ -551,11 +575,14 @@ pub fn cancel_example_recording(app_handle: tauri::AppHandle) {
 #[tauri::command]
 pub fn delete_example(app_handle: tauri::AppHandle, id: String) -> Result<Vec<WordView>, String> {
     let vocab = vocab_dir()?;
-    let audio = known_example(&vocab, &id)?;
     let mut examples = read_examples(&vocab);
+    let before = examples.len();
     examples.retain(|e| e.id != id);
+    if examples.len() == before {
+        return Err("That example no longer exists".to_string());
+    }
     storage::write_json(&examples_index(&vocab), &examples)?;
-    let _ = std::fs::remove_file(audio);
+    let _ = std::fs::remove_file(example_audio(&vocab, &id));
     changed(&app_handle);
     current_views()
 }
@@ -567,7 +594,6 @@ pub fn play_example(id: String) -> Result<(), String> {
 
 #[derive(Serialize)]
 pub struct Taught {
-    /// False when no word was marked for learning, or the dictation is too long to train on
     example_saved: bool,
 }
 
@@ -578,32 +604,35 @@ pub fn teach_from_history(
     text: String,
     words: Vec<String>,
 ) -> Result<Taught, String> {
-    let audio = history::recording(&id)?;
+    // A word fixed twice in the draft only counts in the spelling the line ended up with
+    let words: Vec<&String> = words.iter().filter(|w| mentions(&text, w)).collect();
     let mut config = config::load_config();
-    let mut added = false;
+    let mut added = 0;
     for word in &words {
         if find_word(&config.words, word).is_none() {
             let word = clean_word(word, &config.words)?;
             config.words.push(Word { word, say_as: None });
-            added = true;
+            added += 1;
         }
     }
-    if added {
-        config::save_config(&config)?;
-    }
 
-    let fits = storage::wav_seconds(&audio).is_some_and(|s| s <= MAX_EXAMPLE_SECONDS);
+    let copy = std::env::temp_dir().join(format!("saytype-example-{}.wav", storage::new_id()));
+    history::copy_recording(&id, &copy)?;
+    let fits = storage::wav_seconds(&copy).is_some_and(|s| s <= MAX_EXAMPLE_SECONDS);
     let example_saved = fits && !words.is_empty();
     if example_saved {
-        let copy = std::env::temp_dir().join(format!("saytype-example-{}.wav", storage::new_id()));
-        std::fs::copy(&audio, &copy).map_err(|e| format!("Couldn't copy the recording: {e}"))?;
         add_example(&vocab_dir()?, &copy, &text, Source::History)?;
+    } else {
+        let _ = std::fs::remove_file(&copy);
+    }
+    if added > 0 {
+        config::save_config(&config)?;
+    }
+    if added > 0 || example_saved {
+        changed(&app_handle);
     }
     history::set_text(&id, &text)?;
     let _ = app_handle.emit("history-changed", ());
-    if added || example_saved {
-        changed(&app_handle);
-    }
     Ok(Taught { example_saved })
 }
 
@@ -616,10 +645,7 @@ pub fn retry_training(app_handle: tauri::AppHandle) {
 /// hides the window, so a recording the user walked away from has to be stopped here.
 pub fn settings_closed(app_handle: &tauri::AppHandle) {
     cancel_example_recording(app_handle.clone());
-    let waiting = matches!(lock_trainer().status, Status::Waiting);
-    if waiting {
-        train_if_needed(app_handle);
-    }
+    train_if_needed(app_handle);
 }
 
 #[cfg(test)]
@@ -718,6 +744,7 @@ mod tests {
         let vocab = std::env::temp_dir().join(format!("saytype-vocab-{}", storage::new_id()));
         std::fs::create_dir_all(&vocab).unwrap();
         let words = [word("Flatsby")];
+        assert!(!needs_training(&vocab, &[]));
         assert!(needs_training(&vocab, &words));
 
         // As Python's json.dumps writes it: its own key order, say_as as null
@@ -729,6 +756,10 @@ mod tests {
 
         assert!(!needs_training(&vocab, &words));
         assert!(needs_training(&vocab, &[word("Flatsby"), word("Kimeta")]));
+        assert!(
+            needs_training(&vocab, &[]),
+            "an empty list still has a head to remove"
+        );
         std::fs::remove_dir_all(vocab).unwrap();
     }
 }

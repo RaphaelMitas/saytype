@@ -360,14 +360,13 @@ def run(job_path: Path, model, model_name: str) -> None:
     prepare_units = missing * clips_per_word
     done = 0
 
+    def on_clip():
+        nonlocal done
+        done += 1
+        emit(progress=0.6 * done / max(prepare_units, 1))
+
     rows = []
     for word in words:
-
-        def on_clip():
-            nonlocal done
-            done += 1
-            emit(progress=0.6 * done / max(prepare_units, 1))
-
         rows += word_rows(word, voices, base, cache_dir, on_clip)
     for example in job["examples"]:
         rows += example_rows(example, base, cache_dir) * EXAMPLE_WEIGHT
