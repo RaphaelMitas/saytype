@@ -39,6 +39,8 @@ const INITIAL: View = {
 const HUD = "border border-white/10 bg-zinc-900/95 text-zinc-100 shadow-lg shadow-black/40";
 const BAR_SHAPE = [0.55, 0.85, 1, 0.75, 0.5];
 
+const isRecording = (phase: View["phase"]) => phase === "listening" || phase === "live";
+
 const normalize = (word: string) => word.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
 function sharedPrefix(a: string[], b: string[]): number {
@@ -59,7 +61,7 @@ function reduce(view: View, event: OverlayEvent): View {
       };
     case "live": {
       // A pass that was in flight on release can land after "finishing"
-      if (view.phase !== "listening" && view.phase !== "live") return view;
+      if (!isRecording(view.phase)) return view;
       const words = event.text.split(/\s+/).filter(Boolean);
       // Words the last two passes agree on are unlikely to change again
       const settled = sharedPrefix(view.lastWords, words);
@@ -143,7 +145,7 @@ function StatusIcon({ phase }: { phase: View["phase"] }) {
 }
 
 function Panel({ view, level }: { view: View; level: number }) {
-  const recording = view.phase === "listening" || view.phase === "live";
+  const recording = isRecording(view.phase);
   const elapsed = useElapsedSeconds(view.startedAt, recording);
   const hasText = Boolean(view.settled || view.unsettled);
   const { outer, inner, overflowing } = useOverflow(view.settled + view.unsettled);
@@ -153,9 +155,11 @@ function Panel({ view, level }: { view: View; level: number }) {
       ? "Didn't catch anything."
       : view.phase === "failed"
         ? view.message
-        : !hasText
-          ? "Listening…"
-          : null;
+        : hasText
+          ? null
+          : recording
+            ? "Listening…"
+            : "Transcribing…";
 
   return (
     <div
@@ -210,7 +214,7 @@ function Panel({ view, level }: { view: View; level: number }) {
 }
 
 function Compact({ view, level }: { view: View; level: number }) {
-  const recording = view.phase === "listening" || view.phase === "live";
+  const recording = isRecording(view.phase);
   const { outer, inner, overflowing } = useOverflow(view.settled + view.unsettled);
 
   const label =
@@ -219,7 +223,7 @@ function Compact({ view, level }: { view: View; level: number }) {
       : view.phase === "empty"
         ? "No speech detected"
         : view.phase === "failed"
-          ? "Transcription failed"
+          ? "Nothing pasted"
           : null;
 
   return (
@@ -252,7 +256,9 @@ function Compact({ view, level }: { view: View; level: number }) {
           </span>
         </div>
       ) : (
-        <span className="text-[12.5px] text-zinc-100/55">Listening…</span>
+        <span className="text-[12.5px] text-zinc-100/55">
+          {recording ? "Listening…" : "Transcribing…"}
+        </span>
       )}
     </div>
   );

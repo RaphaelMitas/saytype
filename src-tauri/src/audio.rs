@@ -159,19 +159,7 @@ impl PushToTalkRecorder {
             std::mem::take(&mut *buffer)
         };
 
-        if samples.is_empty() {
-            return Err("No audio samples recorded".to_string());
-        }
-
-        // Resample to 16kHz if needed
-        let resampled = if self.sample_rate != TARGET_SAMPLE_RATE {
-            resample_audio(&samples, self.sample_rate, TARGET_SAMPLE_RATE)?
-        } else {
-            samples
-        };
-
-        // Write to WAV file
-        write_wav_file(&self.output_path, &resampled, TARGET_SAMPLE_RATE)?;
+        write_recording(&self.output_path, &samples, self.sample_rate)?;
 
         // Verify file was created
         if !std::path::Path::new(&self.output_path).exists() {
@@ -310,14 +298,17 @@ fn live_samples() -> Option<(Arc<StdMutex<Vec<f32>>>, u32)> {
     Some((Arc::clone(&recorder.samples), recorder.sample_rate))
 }
 
-/// Writes what has been recorded so far to a 16kHz WAV, leaving the recording running.
 pub fn save_snapshot(path: &str) -> Result<(), String> {
     let (samples, sample_rate) = live_samples().ok_or("No recording in progress")?;
     let samples = samples.lock().map_err(|e| e.to_string())?.clone();
+    write_recording(path, &samples, sample_rate)
+}
+
+fn write_recording(path: &str, samples: &[f32], sample_rate: u32) -> Result<(), String> {
     if samples.is_empty() {
         return Err("No audio samples recorded".to_string());
     }
-    let resampled = resample_audio(&samples, sample_rate, TARGET_SAMPLE_RATE)?;
+    let resampled = resample_audio(samples, sample_rate, TARGET_SAMPLE_RATE)?;
     write_wav_file(path, &resampled, TARGET_SAMPLE_RATE)
 }
 

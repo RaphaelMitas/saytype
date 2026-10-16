@@ -1,15 +1,11 @@
-//! On-screen preview of what Saytype will paste, shown while the hotkey is held.
-//!
-//! The preview reruns the full model on everything recorded so far every
-//! [`PREVIEW_INTERVAL`]. The final paste still comes from the single pass on
-//! release, so the preview never changes what gets inserted.
+//! Display only: the paste still comes from the single pass on release.
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{
-    AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, WebviewUrl,
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Monitor, WebviewUrl,
     WebviewWindowBuilder,
 };
 
@@ -64,10 +60,24 @@ pub fn create_window(app: &AppHandle) -> tauri::Result<()> {
         .visible(false)
         .build()?;
     window.set_ignore_cursor_events(true)?;
+    #[cfg(target_os = "macos")]
+    join_fullscreen_spaces(&window)?;
     Ok(())
 }
 
-/// Shows the overlay and starts the live preview, unless the preview is off.
+/// Without this a background app's window stays off another app's fullscreen Space.
+#[cfg(target_os = "macos")]
+fn join_fullscreen_spaces(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+    let ns_window = window.ns_window()?.cast::<NSWindow>();
+    // SAFETY: Tauri owns the NSWindow for the window's lifetime, and setup runs on the main thread
+    let ns_window = unsafe { &*ns_window };
+    ns_window.setCollectionBehavior(
+        ns_window.collectionBehavior() | NSWindowCollectionBehavior::FullScreenAuxiliary,
+    );
+    Ok(())
+}
+
 pub fn start(app: &AppHandle) {
     let style = config::load_config().preview;
     if style == PreviewStyle::Off {
@@ -80,14 +90,14 @@ pub fn start(app: &AppHandle) {
         .try_state::<AppState>()
         .and_then(|state| state.current_hotkey.lock().ok().map(|h| h.label.clone()))
         .unwrap_or_default();
-    show(app);
+    show_on_cursor_screen(app);
     send(app, OverlayEvent::Listening { style, hotkey });
 
     tauri::async_runtime::spawn(level_loop(app.clone(), session));
     tauri::async_runtime::spawn(preview_loop(app.clone(), session));
 }
 
-/// Ends the live preview on release. Returns the session to hand to [`finish`].
+/// Hand the returned session to [`finish`].
 pub fn stop(app: &AppHandle) -> u64 {
     let session = LIVE.swap(0, Ordering::SeqCst);
     if session != 0 {
@@ -96,7 +106,6 @@ pub fn stop(app: &AppHandle) -> u64 {
     session
 }
 
-/// Shows the outcome briefly, then hides the overlay unless a newer recording took it over.
 pub fn finish(app: &AppHandle, session: u64, outcome: Outcome) {
     if session == 0 || SESSION.load(Ordering::SeqCst) != session {
         return;
@@ -145,19 +154,23 @@ async fn preview_loop(app: AppHandle, session: u64) {
         .to_string_lossy()
         .into_owned();
 
+    let mut wait = PREVIEW_INTERVAL;
     loop {
-        tokio::time::sleep(PREVIEW_INTERVAL).await;
+        tokio::time::sleep(wait).await;
         if LIVE.load(Ordering::SeqCst) != session {
             break;
         }
         if audio::save_snapshot(&path).is_err() {
             continue;
         }
+        let started = Instant::now();
         if let Ok(text) = transcriber::transcribe(&app, &path).await {
             if LIVE.load(Ordering::SeqCst) == session {
                 send(&app, OverlayEvent::Live { text });
             }
         }
+        // A release can't interrupt a pass, so keep the model idle at least two thirds of the time
+        wait = PREVIEW_INTERVAL.max(started.elapsed() * 2);
     }
 
     let _ = std::fs::remove_file(&path);
@@ -167,26 +180,32 @@ fn send(app: &AppHandle, event: OverlayEvent) {
     let _ = app.emit_to(LABEL, "overlay", event);
 }
 
-/// Places the overlay at the bottom centre of the screen the cursor is on, then shows it.
-fn show(app: &AppHandle) {
+fn show_on_cursor_screen(app: &AppHandle) {
     let Some(window) = app.get_webview_window(LABEL) else {
         return;
     };
     if let Some(monitor) = cursor_monitor(app) {
+        // Logical units, because a physical position is converted with the scale of the screen the window is leaving
         let scale = monitor.scale_factor();
         let area = monitor.work_area();
-        let x = area.position.x as f64 + (area.size.width as f64 - WIDTH * scale) / 2.0;
-        let y = area.position.y as f64 + area.size.height as f64 - (HEIGHT + BOTTOM_MARGIN) * scale;
+        let origin = area.position.to_logical::<f64>(scale);
+        let size = area.size.to_logical::<f64>(scale);
+        let x = origin.x + (size.width - WIDTH) / 2.0;
+        let y = origin.y + size.height - HEIGHT - BOTTOM_MARGIN;
         let _ = window.set_size(LogicalSize::new(WIDTH, HEIGHT));
-        let _ = window.set_position(PhysicalPosition::new(x, y));
+        let _ = window.set_position(LogicalPosition::new(x, y));
     }
     let _ = window.show();
 }
 
 fn cursor_monitor(app: &AppHandle) -> Option<Monitor> {
+    let primary = app.primary_monitor().ok().flatten();
     let cursor = app.cursor_position().ok()?;
+    // macOS reports the cursor in points scaled by the primary screen, but looks monitors up in points
+    #[cfg(target_os = "macos")]
+    let cursor = cursor.to_logical::<f64>(primary.as_ref().map_or(1.0, Monitor::scale_factor));
     app.monitor_from_point(cursor.x, cursor.y)
         .ok()
         .flatten()
-        .or_else(|| app.primary_monitor().ok().flatten())
+        .or(primary)
 }

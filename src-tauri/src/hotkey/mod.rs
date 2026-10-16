@@ -7,3 +7,6 @@ pub use macos::{clear_held_keys, setup_event_tap};
 mod windows;
 #[cfg(target_os = "windows")]
 pub use windows::{clear_held_keys, setup_event_tap};
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+mod recording;
