@@ -1,7 +1,9 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
   "files": {
-    "includes": ["src/**"]
+    "includes": [
+      "src/**"
+    ]
   },
   "formatter": {
     "indentStyle": "space",
@@ -12,6 +14,11 @@
     "enabled": true,
     "rules": {
       "recommended": true
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   }
 }
