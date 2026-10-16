@@ -72,6 +72,7 @@ build still works and post-processing reports itself unsupported; CI sets
 | `text_insertion/` | Clipboard save/restore and ⌘V per platform, permission checks |
 | `post_processing.rs` | Optional transcript rewrite before paste, prompts, falls back to raw text |
 | `tray.rs` | Menu bar icon, recording state indicator |
+| `updater.rs` | Background update check/download from GitHub releases, install on restart or quit |
 
 ### State Management
 

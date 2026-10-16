@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import { Onboarding } from "@/components/Onboarding";
 import { Settings } from "@/components/settings/Settings";
 import { checkPermissions, missingPermissions, type Platform } from "@/hooks/usePermissions";
+import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { getHotkeyLabel } from "@/lib/hotkey";
 import { getNetworkConfig, type NetworkConfig } from "@/lib/network";
 
@@ -37,17 +37,9 @@ function App() {
     load().catch(console.error);
   }, []);
 
-  useEffect(() => {
-    if (!startup || serverOnly) return;
-
-    const unlisten = listen("permission-required", () => {
-      setShowOnboarding(true);
-    });
-
-    return () => {
-      unlisten.then((f) => f());
-    };
-  }, [startup, serverOnly]);
+  useTauriEvent("permission-required", () => {
+    if (startup && !serverOnly) setShowOnboarding(true);
+  });
 
   return (
     <main className="relative h-full overflow-y-auto">

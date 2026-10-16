@@ -21,6 +21,8 @@ import { Button } from "@/components/ui/button";
 import { missingPermissions, type Platform, usePermissions } from "@/hooks/usePermissions";
 import { useRecording } from "@/hooks/useRecording";
 import { useSelfTest } from "@/hooks/useSelfTest";
+import { useTauriEvent } from "@/hooks/useTauriEvent";
+import { installUpdate, useUpdateStatus } from "@/hooks/useUpdateStatus";
 import type { NetworkConfig } from "@/lib/network";
 
 type Page = "general" | "hotkey" | "post_processing" | "mode" | "permissions" | "about";
@@ -59,6 +61,9 @@ export function Settings({ platform, runningNetwork, hotkey, onHotkeyChange }: S
   const recording = useRecording();
   const selfTest = useSelfTest();
   const { permissions, refresh, requestMicrophone } = usePermissions();
+  const update = useUpdateStatus();
+
+  useTauriEvent("show-about", () => setPage("about"));
 
   const serverOnly = runningNetwork.mode === "server_only";
   const missing = permissions && !serverOnly ? missingPermissions(permissions, platform) : [];
@@ -94,6 +99,7 @@ export function Settings({ platform, runningNetwork, hotkey, onHotkeyChange }: S
             !(serverOnly && item.hiddenInServerMode) && !(platform !== "macos" && item.macOnly),
         ).map(navButton)}
         <div className="flex-1" />
+        {update?.state === "ready" && <UpdateReadyCard version={update.version} />}
         {navButton({ page: "about", label: "About", icon: Info })}
       </nav>
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 pt-10 pb-6">
@@ -137,8 +143,32 @@ export function Settings({ platform, runningNetwork, hotkey, onHotkeyChange }: S
             />
           </>
         )}
-        {page === "about" && <AboutPage platform={platform} />}
+        {page === "about" && <AboutPage platform={platform} update={update} />}
       </div>
+    </div>
+  );
+}
+
+function UpdateReadyCard({ version }: { version: string }) {
+  const [restarting, setRestarting] = useState(false);
+
+  const restart = () => {
+    setRestarting(true);
+    installUpdate().catch((error) => {
+      console.error(error);
+      setRestarting(false);
+    });
+  };
+
+  return (
+    <div className="mb-2 flex flex-col gap-2 rounded-lg border border-primary/30 bg-primary/10 p-2.5">
+      <div>
+        <div className="text-sm font-medium">Update ready</div>
+        <div className="text-xs text-muted-foreground">Saytype {version}</div>
+      </div>
+      <Button size="sm" disabled={restarting} onClick={restart}>
+        {restarting ? "Restarting…" : "Restart to Update"}
+      </Button>
     </div>
   );
 }

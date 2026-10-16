@@ -17,7 +17,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Async runtime
-tokio = { version = "1", features = ["sync", "fs", "macros", "rt"] }
+tokio = { version = "1", features = ["sync", "fs", "macros", "rt", "time"] }
 
 # Audio recording
 cpal = "0.18"
@@ -30,6 +30,10 @@ reqwest = { version = "0.13", features = ["json"] }
 
 # Lazy initialization
 lazy_static = "1.5"
+
+# Git pin: every published 2.x needs a fully yanked zip (^2 or ^4); back to version = "2" once tauri-apps/plugins-workspace#3698 ships
+tauri-plugin-updater = { git = "https://github.com/tauri-apps/plugins-workspace", rev = "ba98bfadc4c868c9a7e1a226c83af528e1f11b89", version = "2.14.0" }
+plist = "1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
