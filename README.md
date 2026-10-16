@@ -4,8 +4,6 @@
 
 macOS menu bar app for push-to-talk speech-to-text. Hold the Right Command key to record, release to transcribe and insert text at cursor. Runs entirely offline using Apple Silicon ML.
 
-> **Note:** This app was vibecoded with [Claude](https://claude.ai).
-
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://github.com/RaphaelMitas/saytype/releases/latest/download/screenshot-general-dark.png">
