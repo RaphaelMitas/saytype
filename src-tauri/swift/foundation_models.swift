@@ -6,7 +6,6 @@ public func saytypeFmAvailability() -> Int32 {
     guard #available(macOS 26.0, *) else { return 4 }
     switch SystemLanguageModel.default.availability {
     case .available: return 0
-    case .unavailable(.deviceNotEligible): return 1
     case .unavailable(.appleIntelligenceNotEnabled): return 2
     case .unavailable(.modelNotReady): return 3
     case .unavailable: return 1

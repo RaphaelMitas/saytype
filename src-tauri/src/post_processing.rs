@@ -112,7 +112,7 @@ impl Default for Settings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Prompt {
     id: String,
     name: String,
@@ -153,7 +153,7 @@ impl Settings {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 // Only the Swift bridge reports anything but Unsupported
 #[cfg_attr(not(foundation_models), allow(dead_code))]

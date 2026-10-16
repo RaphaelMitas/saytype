@@ -106,7 +106,6 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
                         Ok(text) => (text, None),
                         Err(e) => (raw.clone(), Some(e)),
                     };
-                    // Before the paste starts, so a fast failure always lands after it
                     preview::finish(&handle, preview_session, Outcome::Pasted(text.clone()));
                     let _ = handle.emit(
                         "transcription-complete",
