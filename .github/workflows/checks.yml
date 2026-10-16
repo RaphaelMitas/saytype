@@ -163,3 +163,8 @@ jobs:
         run: |
           source .venv/bin/activate
           pyright
+
+      - name: TDT loss matches brute force
+        run: |
+          source .venv/bin/activate
+          python tests/test_tdt_loss.py
