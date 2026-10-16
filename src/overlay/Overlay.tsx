@@ -152,7 +152,6 @@ function Panel({ view, level }: { view: View; level: number }) {
   const recording = isRecording(view.phase);
   const elapsed = useElapsedSeconds(view.startedAt, recording);
   const hasText = Boolean(view.settled || view.unsettled);
-  const { outer, inner, overflowing } = useOverflow(view.settled + view.unsettled);
 
   const placeholder =
     view.phase === "empty"
@@ -164,6 +163,7 @@ function Panel({ view, level }: { view: View; level: number }) {
           : recording
             ? "Listening…"
             : "Transcribing…";
+  const { outer, inner, overflowing } = useOverflow(placeholder ?? view.settled + view.unsettled);
 
   return (
     <div
