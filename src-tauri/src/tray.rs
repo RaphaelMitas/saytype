@@ -14,7 +14,7 @@ lazy_static::lazy_static! {
 static IS_RECORDING: AtomicBool = AtomicBool::new(false);
 static UPDATE_READY: AtomicBool = AtomicBool::new(false);
 
-const BADGE_RGB: [u8; 3] = [0x0a, 0x84, 0xff];
+const BADGE_RGBA: [u8; 4] = [0x0a, 0x84, 0xff, 0xff];
 
 pub fn setup_tray_with_tooltip(
     app: &AppHandle,
@@ -133,14 +133,12 @@ fn refresh_icon(app: &AppHandle, tray: &TrayIcon) {
 }
 
 fn load_icon(app: &AppHandle, icon_name: &str) -> Option<Image<'static>> {
-    // Try resource directory first (production)
     if let Ok(resource_path) = app.path().resource_dir() {
         if let Ok(icon) = Image::from_path(resource_path.join(icon_name)) {
             return Some(icon);
         }
     }
 
-    // Try relative to src-tauri directory (development)
     let dev_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(icon_name);
     Image::from_path(dev_path).ok()
 }
@@ -159,7 +157,7 @@ fn with_badge(icon: &Image<'_>) -> Image<'static> {
                 continue;
             }
             let i = ((y * width + x) * 4) as usize;
-            for (channel, target) in BADGE_RGB.into_iter().chain([255]).enumerate() {
+            for (channel, target) in BADGE_RGBA.into_iter().enumerate() {
                 let current = rgba[i + channel] as f32;
                 rgba[i + channel] = (current + (target as f32 - current) * coverage).round() as u8;
             }

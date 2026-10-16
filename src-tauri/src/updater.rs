@@ -151,8 +151,7 @@ async fn download(app: &AppHandle) -> Result<Option<Pending>, Box<dyn Error>> {
     Ok(Some(Pending { update, archive }))
 }
 
-/// Main thread only: the plugin asks for an admin password on the main thread when the app
-/// isn't writable, so a main thread waiting on an install elsewhere would deadlock.
+/// Main thread only: that serializes installs with quit and restart without the main thread ever waiting on one.
 pub fn install_pending() -> Result<(), String> {
     let Some(Pending { update, archive }) = STATE.lock().unwrap().pending.take() else {
         return Ok(());
@@ -166,7 +165,7 @@ pub fn install_pending() -> Result<(), String> {
 }
 
 fn install(update: &Update, archive: &Path) -> Result<(), Box<dyn Error>> {
-    // Replaced while running, e.g. by `brew upgrade`: installing would downgrade it
+    // Replaced while running, e.g. by `brew upgrade`: don't put this older download over it
     if installed_version().as_deref() != Some(update.current_version.as_str()) {
         return Ok(());
     }
