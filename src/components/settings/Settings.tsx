@@ -31,20 +31,19 @@ const NAV: NavItem[] = [
 
 interface SettingsProps {
   platform: Platform;
-  network: NetworkConfig;
+  runningNetwork: NetworkConfig;
   hotkey: string;
   onHotkeyChange: (label: string) => void;
 }
 
-export function Settings({ platform, network, hotkey, onHotkeyChange }: SettingsProps) {
+export function Settings({ platform, runningNetwork, hotkey, onHotkeyChange }: SettingsProps) {
   const [page, setPage] = useState<Page>("general");
   const recording = useRecording();
   const selfTest = useSelfTest();
   const { permissions, refresh, requestMicrophone } = usePermissions();
-  // network is what this process runs with; saved can differ until a restart
-  const [savedNetwork, setSavedNetwork] = useState(network);
+  const [savedNetwork, setSavedNetwork] = useState(runningNetwork);
 
-  const serverOnly = network?.mode === "server_only";
+  const serverOnly = runningNetwork.mode === "server_only";
   const missing = permissions && !serverOnly ? missingPermissions(permissions, platform) : [];
 
   const navButton = ({ page: target, label, icon: Icon }: NavItem) => (
@@ -82,7 +81,7 @@ export function Settings({ platform, network, hotkey, onHotkeyChange }: Settings
           <GeneralPage
             {...recording}
             selfTest={selfTest}
-            network={network}
+            network={runningNetwork}
             hotkey={hotkey}
             missingPermissions={missing}
             onFixPermissions={() => setPage("permissions")}
@@ -94,7 +93,7 @@ export function Settings({ platform, network, hotkey, onHotkeyChange }: Settings
         {page === "mode" && (
           <ModePage
             platform={platform}
-            running={network}
+            running={runningNetwork}
             saved={savedNetwork}
             onSaved={setSavedNetwork}
             initializing={recording.state === "initializing"}
@@ -115,7 +114,7 @@ export function Settings({ platform, network, hotkey, onHotkeyChange }: Settings
               permissions={permissions}
               platform={platform}
               onRequestMicrophone={requestMicrophone}
-              actionVariant="default"
+              highlightFirstAction
             />
           </>
         )}

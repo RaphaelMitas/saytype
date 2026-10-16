@@ -26,7 +26,7 @@ function App() {
         checkPermissions(),
         getHotkeyLabel(),
       ]);
-      // Server Only mode needs no local permissions, so skip onboarding
+      // Server Only mode needs no local permissions
       if (network.mode !== "server_only" && missingPermissions(permissions, platform).length > 0) {
         setShowOnboarding(true);
       }
@@ -61,7 +61,7 @@ function App() {
       ) : (
         <Settings
           platform={startup.platform}
-          network={startup.network}
+          runningNetwork={startup.network}
           hotkey={hotkey}
           onHotkeyChange={setHotkey}
         />

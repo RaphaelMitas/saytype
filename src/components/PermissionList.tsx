@@ -9,21 +9,26 @@ import {
   type Platform,
   type PrivacyPane,
 } from "@/hooks/usePermissions";
-
-type ActionVariant = "default" | "outline";
+import { restartApp } from "@/lib/app";
 
 interface PermissionListProps {
   permissions: Permissions;
   platform: Platform;
   onRequestMicrophone: () => void;
-  actionVariant?: ActionVariant;
+  highlightFirstAction?: boolean;
+}
+
+interface Action {
+  label: string;
+  onClick: () => void;
 }
 
 interface Row {
   icon: LucideIcon;
   title: string;
   description: string;
-  action: ReactNode;
+  action?: Action;
+  badge?: ReactNode;
 }
 
 const granted = (
@@ -33,48 +38,31 @@ const granted = (
   </Badge>
 );
 
-function openSettingsButton(pane: PrivacyPane, variant: ActionVariant) {
-  return (
-    <Button variant={variant} size="sm" onClick={() => openPrivacySettings(pane)}>
-      Open Settings
-    </Button>
-  );
-}
+const openSettings = (pane: PrivacyPane): Action => ({
+  label: "Open Settings",
+  onClick: () => openPrivacySettings(pane),
+});
 
 function microphoneRow(
   permissions: Permissions,
   platform: Platform,
   onRequestMicrophone: () => void,
-  variant: ActionVariant,
 ): Row {
   const row = { icon: Mic, title: "Microphone", description: "To hear you" };
   switch (permissions.microphone) {
     case "granted":
-      return { ...row, action: granted };
+      return { ...row, badge: granted };
     case "undetermined":
-      return {
-        ...row,
-        action: (
-          <Button variant={variant} size="sm" onClick={onRequestMicrophone}>
-            Allow
-          </Button>
-        ),
-      };
+      return { ...row, action: { label: "Allow", onClick: onRequestMicrophone } };
     case "denied":
-      return {
-        ...row,
-        action:
-          platform === "windows" ? (
-            <Badge variant="destructive">Denied</Badge>
-          ) : (
-            openSettingsButton("microphone", variant)
-          ),
-      };
+      return platform === "windows"
+        ? { ...row, badge: <Badge variant="destructive">Denied</Badge> }
+        : { ...row, action: openSettings("microphone") };
     case "blocked":
       return {
         ...row,
         description: "macOS can't show the prompt here. Start Saytype from Terminal.",
-        action: <Badge variant="destructive">Blocked</Badge>,
+        badge: <Badge variant="destructive">Blocked</Badge>,
       };
   }
 }
@@ -83,43 +71,54 @@ export function PermissionList({
   permissions,
   platform,
   onRequestMicrophone,
-  actionVariant = "outline",
+  highlightFirstAction = false,
 }: PermissionListProps) {
-  const rows: Row[] = [microphoneRow(permissions, platform, onRequestMicrophone, actionVariant)];
+  const rows: Row[] = [microphoneRow(permissions, platform, onRequestMicrophone)];
   if (platform !== "windows") {
     rows.push(
       {
         icon: Shield,
         title: "Accessibility",
         description: "To paste at the cursor",
-        action: permissions.accessibility
-          ? granted
-          : openSettingsButton("accessibility", actionVariant),
+        ...(permissions.accessibility
+          ? { badge: granted }
+          : { action: openSettings("accessibility") }),
       },
       {
         icon: Keyboard,
         title: "Input Monitoring",
         description: "To catch the hotkey",
-        action: permissions.input_monitoring
-          ? granted
-          : openSettingsButton("input_monitoring", actionVariant),
+        ...(permissions.input_monitoring
+          ? { badge: granted }
+          : { action: openSettings("input_monitoring") }),
       },
     );
   }
+  const firstAction = rows.findIndex((row) => row.action);
   const needsRelaunch =
     platform === "macos" && (!permissions.accessibility || !permissions.input_monitoring);
 
   return (
     <div className="flex flex-col gap-3">
       <div className="divide-y rounded-xl border bg-card">
-        {rows.map(({ icon: Icon, title, description, action }) => (
+        {rows.map(({ icon: Icon, title, description, action, badge }, index) => (
           <div key={title} className="flex min-h-14 items-center gap-3 px-3 py-2">
             <Icon className="size-4 shrink-0 text-muted-foreground" />
             <div className="flex-1">
               <div className="text-sm">{title}</div>
               <div className="text-xs text-muted-foreground">{description}</div>
             </div>
-            {action}
+            {action ? (
+              <Button
+                variant={highlightFirstAction && index === firstAction ? "default" : "outline"}
+                size="sm"
+                onClick={action.onClick}
+              >
+                {action.label}
+              </Button>
+            ) : (
+              badge
+            )}
           </div>
         ))}
       </div>
@@ -130,7 +129,7 @@ export function PermissionList({
             variant="link"
             size="xs"
             className="h-auto px-0"
-            onClick={() => invoke("quit_app")}
+            onClick={async () => (await restartApp()) || invoke("quit_app")}
           >
             Quit and reopen
           </Button>

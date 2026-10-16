@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useCopied } from "@/hooks/useCopied";
 import type { Platform } from "@/hooks/usePermissions";
+import { restartApp } from "@/lib/app";
 import {
   DEFAULT_PORT,
   type NetworkConfig,
@@ -43,6 +44,7 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
   const [localIp, setLocalIp] = useState<string | null>(null);
   const { copied, copy } = useCopied();
   const port = saved.server_port ?? DEFAULT_PORT;
+  const [portText, setPortText] = useState(String(port));
   const needsRestart =
     saved.mode !== running.mode ||
     saved.server_url !== running.server_url ||
@@ -56,7 +58,7 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
     try {
       await setNetworkConfig(config);
       onSaved(config);
-      if (restart) await invoke("restart_app");
+      if (restart) await restartApp();
     } catch (error) {
       console.error("Failed to save network config:", error);
     }
@@ -85,7 +87,19 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
     }
   };
 
-  const shareUrl = localIp ? `http://${localIp}:${port}` : null;
+  const commitPort = () => {
+    const value = Number(portText);
+    if (!Number.isInteger(value) || value < 1 || value > 65535) {
+      setPortText(String(port));
+    } else if (value !== port) {
+      save({ ...saved, server_port: value }, false);
+    }
+  };
+
+  const shareUrl =
+    localIp && running.mode === "server_only"
+      ? `http://${localIp}:${running.server_port ?? DEFAULT_PORT}`
+      : null;
 
   return (
     <>
@@ -120,9 +134,12 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
       )}
 
       {needsRestart && (
-        <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
-          Restart Saytype to apply.
-        </p>
+        <div className="flex items-center gap-2 rounded-lg bg-warning/10 py-1.5 pr-1.5 pl-3 text-xs text-warning">
+          <span className="flex-1">Saved. Restart Saytype to apply.</span>
+          <Button variant="outline" size="xs" onClick={restartApp}>
+            Restart
+          </Button>
+        </div>
       )}
 
       {saved.mode === "client_only" && (
@@ -168,10 +185,10 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
               type="number"
               min={1}
               max={65535}
-              value={port}
-              onChange={(e) =>
-                save({ ...saved, server_port: parseInt(e.target.value, 10) || DEFAULT_PORT }, false)
-              }
+              value={portText}
+              onChange={(e) => setPortText(e.target.value)}
+              onBlur={commitPort}
+              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
             />
           </div>
           {!initializing && shareUrl && (

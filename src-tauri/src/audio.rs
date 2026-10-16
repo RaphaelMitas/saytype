@@ -3,6 +3,8 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, Stream};
 use hound::{WavSpec, WavWriter};
 use rubato::{Fft, FixedSync, Resampler};
+#[cfg(target_os = "macos")]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 
 const TARGET_SAMPLE_RATE: u32 = 16000; // 16kHz for Whisper/Parakeet
@@ -312,6 +314,10 @@ pub enum MicPermission {
     Blocked,
 }
 
+/// macOS keeps reporting NotDetermined after a blocked prompt, so remember it.
+#[cfg(target_os = "macos")]
+static MIC_PROMPT_BLOCKED: AtomicBool = AtomicBool::new(false);
+
 pub fn microphone_permission() -> MicPermission {
     #[cfg(target_os = "macos")]
     {
@@ -320,7 +326,13 @@ pub fn microphone_permission() -> MicPermission {
             .map(|audio| unsafe { AVCaptureDevice::authorizationStatusForMediaType(audio) });
         match status {
             Some(AVAuthorizationStatus::Authorized) => MicPermission::Granted,
-            Some(AVAuthorizationStatus::NotDetermined) | None => MicPermission::Undetermined,
+            Some(AVAuthorizationStatus::NotDetermined) | None => {
+                if MIC_PROMPT_BLOCKED.load(Ordering::Relaxed) {
+                    MicPermission::Blocked
+                } else {
+                    MicPermission::Undetermined
+                }
+            }
             Some(_) => MicPermission::Denied,
         }
     }
@@ -335,10 +347,10 @@ pub async fn request_microphone_permission() -> MicPermission {
     {
         let _ = ask_for_microphone().recv().await;
         // A refused prompt records Denied; a launcher that can't prompt records nothing.
-        match microphone_permission() {
-            MicPermission::Undetermined => MicPermission::Blocked,
-            permission => permission,
+        if microphone_permission() == MicPermission::Undetermined {
+            MIC_PROMPT_BLOCKED.store(true, Ordering::Relaxed);
         }
+        microphone_permission()
     }
     #[cfg(not(target_os = "macos"))]
     {

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useState } from "react";
 
 export type Platform = "macos" | "windows" | "unknown";
@@ -35,14 +36,8 @@ export function missingPermissions(permissions: Permissions, platform: Platform)
 export function usePermissions() {
   const [permissions, setPermissions] = useState<Permissions | null>(null);
 
-  // Only a failed request reports "blocked", so a later check must not reset it
   const refresh = useCallback(async () => {
-    const next = await checkPermissions();
-    setPermissions((prev) =>
-      prev?.microphone === "blocked" && next.microphone === "undetermined"
-        ? { ...next, microphone: "blocked" }
-        : next,
-    );
+    setPermissions(await checkPermissions());
   }, []);
 
   const requestMicrophone = useCallback(async () => {
@@ -53,8 +48,12 @@ export function usePermissions() {
   useEffect(() => {
     refresh();
     // Focus is when the user comes back from System Settings
-    window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
+    const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused) refresh();
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
   }, [refresh]);
 
   return { permissions, refresh, requestMicrophone };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -20,11 +20,6 @@ const WINDOWS_KEYS: Record<string, string> = {
   ControlLeft: "Left Ctrl",
   ControlRight: "Right Ctrl",
   CapsLock: "Caps Lock",
-  Space: "Space",
-  Tab: "Tab",
-  Enter: "Enter",
-  Escape: "Escape",
-  Backspace: "Backspace",
 };
 
 const MAC_KEYS: Record<string, string> = {
@@ -37,10 +32,7 @@ const MAC_KEYS: Record<string, string> = {
   ControlLeft: "Left ⌃",
   ControlRight: "Right ⌃",
   CapsLock: "⇪ Caps",
-  Space: "Space",
-  Tab: "Tab",
   Enter: "Return",
-  Escape: "Escape",
   Backspace: "Delete",
   Fn: "fn",
 };
@@ -64,23 +56,20 @@ export function HotkeyPage({ platform, hotkey, onChange }: HotkeyPageProps) {
   const [isListening, setIsListening] = useState(false);
   const [pendingKeys, setPendingKeys] = useState<PendingKey[]>([]);
 
-  const stopListening = () => {
-    setIsListening(false);
-    setPendingKeys([]);
-  };
+  useEffect(() => {
+    if (!isListening) return;
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const { code, location } = e;
-    setPendingKeys((prev) =>
-      prev.some((k) => k.code === code) ? prev : [...prev, { code, location }],
-    );
-  }, []);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const { code, location } = e;
+      setPendingKeys((prev) =>
+        prev.some((k) => k.code === code) ? prev : [...prev, { code, location }],
+      );
+    };
 
-  // Releasing any key saves the combo held so far
-  const handleKeyUp = useCallback(
-    async (e: KeyboardEvent) => {
+    // Releasing any key saves the combo held so far
+    const handleKeyUp = async (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (pendingKeys.length === 0) return;
@@ -95,20 +84,20 @@ export function HotkeyPage({ platform, hotkey, onChange }: HotkeyPageProps) {
         console.error("Failed to set hotkey:", error);
       }
       setIsListening(false);
-      setPendingKeys([]);
-    },
-    [pendingKeys, onChange],
-  );
+    };
 
-  useEffect(() => {
-    if (!isListening) return;
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("keyup", handleKeyUp, true);
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("keyup", handleKeyUp, true);
     };
-  }, [isListening, handleKeyDown, handleKeyUp]);
+  }, [isListening, pendingKeys, onChange]);
+
+  const startListening = () => {
+    setPendingKeys([]);
+    setIsListening(true);
+  };
 
   return (
     <>
@@ -125,7 +114,7 @@ export function HotkeyPage({ platform, hotkey, onChange }: HotkeyPageProps) {
             variant="ghost"
             size="sm"
             className="text-muted-foreground"
-            onClick={stopListening}
+            onClick={() => setIsListening(false)}
           >
             Cancel
           </Button>
@@ -133,7 +122,7 @@ export function HotkeyPage({ platform, hotkey, onChange }: HotkeyPageProps) {
       ) : (
         <div className="flex flex-col items-center gap-4 rounded-xl border bg-card px-4 py-8">
           <Kbd className="h-11 border-b-[3px] px-4 text-lg text-foreground">{hotkey}</Kbd>
-          <Button size="sm" onClick={() => setIsListening(true)}>
+          <Button size="sm" onClick={startListening}>
             Record new shortcut
           </Button>
         </div>
