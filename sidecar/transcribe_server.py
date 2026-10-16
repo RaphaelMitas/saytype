@@ -176,11 +176,19 @@ def http_server_mode(model_name: str, host: str, port: int):
         GET  /health     -> {"status": "ready"} or {"status": "loading"}
         POST /transcribe -> {"success": true, "text": "..."} (body: raw WAV bytes)
     """
+    import socket
     import tempfile
     from http.server import BaseHTTPRequestHandler, HTTPServer
 
     class ReusableHTTPServer(HTTPServer):
         allow_reuse_address = True
+        address_family = socket.AF_INET6 if ":" in host else socket.AF_INET
+
+        def server_bind(self):
+            # Dual-stack: .local names often resolve to IPv6 first, older clients still use IPv4
+            if self.address_family == socket.AF_INET6:
+                self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            super().server_bind()
 
     model_ready = False
 
@@ -264,7 +272,10 @@ def main():
         "--http", action="store_true", help="Run as HTTP server instead of stdin/stdout IPC"
     )
     parser.add_argument(
-        "--host", type=str, default="0.0.0.0", help="HTTP server bind address (default: 0.0.0.0)"
+        "--host",
+        type=str,
+        default="::",
+        help="HTTP server bind address (default: ::, IPv6 and IPv4)",
     )
     parser.add_argument("--port", type=int, default=8765, help="HTTP server port (default: 8765)")
     args = parser.parse_args()

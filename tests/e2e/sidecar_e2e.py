@@ -210,8 +210,10 @@ def test_ipc_mode(binary: Path, fixture: Path, expected: str) -> None:
         terminate(proc)
 
 
-def http_request(port: int, method: str, path: str, body: bytes | None = None):
-    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=TRANSCRIBE_TIMEOUT)
+def http_request(
+    port: int, method: str, path: str, body: bytes | None = None, host: str = "127.0.0.1"
+):
+    conn = http.client.HTTPConnection(host, port, timeout=TRANSCRIBE_TIMEOUT)
     try:
         headers = {"Content-Type": "application/octet-stream"} if body else {}
         conn.request(method, path, body=body, headers=headers)
@@ -226,7 +228,7 @@ def test_http_mode(binary: Path, fixture: Path, expected: str) -> None:
     print("\n=== Mode 3: --http ===")
     port = free_port()
     proc = subprocess.Popen(
-        [str(binary), "--http", "--host", "127.0.0.1", "--port", str(port)],
+        [str(binary), "--http", "--host", "::", "--port", str(port)],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=None,
@@ -238,10 +240,14 @@ def test_http_mode(binary: Path, fixture: Path, expected: str) -> None:
         # transcriber.rs blocks on this exact substring to decide the server is up.
         stdout.wait_for("[HTTP] Listening on", READY_TIMEOUT)
 
-        status, health = http_request(port, "GET", "/health")
-        if status != 200 or health.get("status") != "ready":
-            raise TestFailure(f"/health returned {status} {health}, expected 200 ready")
-        print("  /health OK")
+        # .local names often resolve to IPv6 first, so the server must answer on both
+        for host in ("127.0.0.1", "::1"):
+            status, health = http_request(port, "GET", "/health", host=host)
+            if status != 200 or health.get("status") != "ready":
+                raise TestFailure(
+                    f"/health on {host} returned {status} {health}, expected 200 ready"
+                )
+        print("  /health OK on IPv4 and IPv6")
 
         status, result = http_request(port, "POST", "/transcribe", fixture.read_bytes())
         if status != 200 or not result.get("success"):
