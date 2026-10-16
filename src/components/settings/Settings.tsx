@@ -1,7 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
 import { cn } from "cn";
 import { Globe, House, Info, Keyboard, type LucideIcon, RefreshCw, Shield } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { PermissionList } from "@/components/PermissionList";
 import { AboutPage } from "@/components/settings/AboutPage";
 import { GeneralPage } from "@/components/settings/GeneralPage";
@@ -11,7 +10,8 @@ import { PageHeader } from "@/components/settings/PageHeader";
 import { Button } from "@/components/ui/button";
 import { missingPermissions, type Platform, usePermissions } from "@/hooks/usePermissions";
 import { useRecording } from "@/hooks/useRecording";
-import { getNetworkConfig, type NetworkConfig } from "@/lib/network";
+import { useSelfTest } from "@/hooks/useSelfTest";
+import type { NetworkConfig } from "@/lib/network";
 
 type Page = "general" | "hotkey" | "mode" | "permissions" | "about";
 
@@ -29,19 +29,20 @@ const NAV: NavItem[] = [
   { page: "permissions", label: "Permissions", icon: Shield, hiddenInServerMode: true },
 ];
 
-export function Settings({ platform }: { platform: Platform }) {
+interface SettingsProps {
+  platform: Platform;
+  network: NetworkConfig;
+  hotkey: string;
+  onHotkeyChange: (label: string) => void;
+}
+
+export function Settings({ platform, network, hotkey, onHotkeyChange }: SettingsProps) {
   const [page, setPage] = useState<Page>("general");
   const recording = useRecording();
+  const selfTest = useSelfTest();
   const { permissions, refresh, requestMicrophone } = usePermissions();
-  const [network, setNetwork] = useState<NetworkConfig | null>(null);
-  const [hotkey, setHotkey] = useState("Right ⌘");
-
-  useEffect(() => {
-    getNetworkConfig().then(setNetwork).catch(console.error);
-    invoke<{ label: string }>("get_current_hotkey")
-      .then((config) => setHotkey(config.label))
-      .catch(console.error);
-  }, []);
+  // network is what this process runs with; saved can differ until a restart
+  const [savedNetwork, setSavedNetwork] = useState(network);
 
   const serverOnly = network?.mode === "server_only";
   const missing = permissions && !serverOnly ? missingPermissions(permissions, platform) : [];
@@ -77,9 +78,10 @@ export function Settings({ platform }: { platform: Platform }) {
         {navButton({ page: "about", label: "About", icon: Info })}
       </nav>
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 pt-10 pb-6">
-        {page === "general" && network && (
+        {page === "general" && (
           <GeneralPage
             {...recording}
+            selfTest={selfTest}
             network={network}
             hotkey={hotkey}
             missingPermissions={missing}
@@ -87,12 +89,14 @@ export function Settings({ platform }: { platform: Platform }) {
           />
         )}
         {page === "hotkey" && (
-          <HotkeyPage platform={platform} hotkey={hotkey} onChange={setHotkey} />
+          <HotkeyPage platform={platform} hotkey={hotkey} onChange={onHotkeyChange} />
         )}
-        {page === "mode" && network && (
+        {page === "mode" && (
           <ModePage
             platform={platform}
-            network={network}
+            running={network}
+            saved={savedNetwork}
+            onSaved={setSavedNetwork}
             initializing={recording.state === "initializing"}
           />
         )}
@@ -111,6 +115,7 @@ export function Settings({ platform }: { platform: Platform }) {
               permissions={permissions}
               platform={platform}
               onRequestMicrophone={requestMicrophone}
+              actionVariant="default"
             />
           </>
         )}

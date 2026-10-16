@@ -1,14 +1,15 @@
-import { invoke } from "@tauri-apps/api/core";
 import { cn } from "cn";
 import { Check, Copy, Mic } from "lucide-react";
-import { useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
+import { useCopied } from "@/hooks/useCopied";
 import type { UseRecordingResult } from "@/hooks/useRecording";
-import type { NetworkConfig } from "@/lib/network";
+import type { SelfTest } from "@/hooks/useSelfTest";
+import { DEFAULT_PORT, type NetworkConfig } from "@/lib/network";
 
 interface GeneralPageProps extends UseRecordingResult {
+  selfTest: SelfTest;
   network: NetworkConfig;
   hotkey: string;
   missingPermissions: string[];
@@ -19,14 +20,13 @@ export function GeneralPage({
   state,
   lastTranscription,
   lastError,
+  selfTest,
   network,
   hotkey,
   missingPermissions,
   onFixPermissions,
 }: GeneralPageProps) {
-  const [testStatus, setTestStatus] = useState<string | null>(null);
-  const [isTesting, setIsTesting] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopied();
   const serverOnly = network.mode === "server_only";
 
   const status = (() => {
@@ -55,38 +55,7 @@ export function GeneralPage({
       ? "On-device"
       : network.mode === "client_only"
         ? (network.server_url ?? "Remote server")
-        : `Serving on port ${network.server_port ?? 8765}`;
-
-  const handleTestRecording = async () => {
-    setIsTesting(true);
-    try {
-      setTestStatus("Recording for 3 seconds… speak now");
-      await invoke("test_start_recording");
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      setTestStatus("Transcribing…");
-      const result = await invoke<string>("test_stop_and_transcribe");
-      setTestStatus(`Transcription: "${result}"`);
-    } catch (error) {
-      setTestStatus(`Error: ${error}`);
-    } finally {
-      setIsTesting(false);
-    }
-  };
-
-  const handleTestSidecar = async () => {
-    try {
-      setTestStatus("Testing sidecar…");
-      setTestStatus(`Sidecar: ${await invoke<string>("test_sidecar")}`);
-    } catch (error) {
-      setTestStatus(`Sidecar error: ${error}`);
-    }
-  };
-
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+        : `Serving on port ${network.server_port ?? DEFAULT_PORT}`;
 
   return (
     <>
@@ -117,23 +86,23 @@ export function GeneralPage({
                 size="sm"
                 className="text-muted-foreground"
                 disabled={state === "initializing"}
-                onClick={handleTestSidecar}
+                onClick={selfTest.testSidecar}
               >
                 Test sidecar
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                disabled={isTesting || state === "initializing"}
-                onClick={handleTestRecording}
+                disabled={selfTest.isRecording || state === "initializing"}
+                onClick={selfTest.testRecording}
               >
                 <Mic />
-                {isTesting ? "Recording…" : "Test recording"}
+                {selfTest.isRecording ? "Recording…" : "Test recording"}
               </Button>
             </>
           )}
         </div>
-        {testStatus && <p className="text-xs text-muted-foreground">{testStatus}</p>}
+        {selfTest.status && <p className="text-xs text-muted-foreground">{selfTest.status}</p>}
         {lastError && <p className="text-xs text-destructive">{lastError}</p>}
       </div>
 
@@ -164,7 +133,7 @@ export function GeneralPage({
               size="icon-xs"
               aria-label="Copy"
               className="text-muted-foreground"
-              onClick={() => handleCopy(lastTranscription)}
+              onClick={() => copy(lastTranscription)}
             >
               {copied ? <Check /> : <Copy />}
             </Button>

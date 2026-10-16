@@ -1,9 +1,9 @@
-import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import type { Platform } from "@/hooks/usePermissions";
+import { setHotkey } from "@/lib/hotkey";
 
 interface PendingKey {
   code: string;
@@ -85,13 +85,12 @@ export function HotkeyPage({ platform, hotkey, onChange }: HotkeyPageProps) {
       e.stopPropagation();
       if (pendingKeys.length === 0) return;
       try {
-        const result = await invoke<{ label: string }>("set_hotkey", {
-          params: {
-            codes: pendingKeys.map((k) => k.code),
-            locations: pendingKeys.map((k) => k.location),
-          },
-        });
-        onChange(result.label);
+        onChange(
+          await setHotkey(
+            pendingKeys.map((k) => k.code),
+            pendingKeys.map((k) => k.location),
+          ),
+        );
       } catch (error) {
         console.error("Failed to set hotkey:", error);
       }
@@ -117,7 +116,7 @@ export function HotkeyPage({ platform, hotkey, onChange }: HotkeyPageProps) {
       {isListening ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-primary bg-card px-4 py-8">
           <div className="text-xs text-muted-foreground">Press the new shortcut</div>
-          <Kbd className="h-11 border border-b-[3px] px-4 text-lg text-primary">
+          <Kbd className="h-11 border-b-[3px] px-4 text-lg text-primary">
             {pendingKeys.length > 0
               ? pendingKeys.map((k) => formatKeyCode(k.code, platform)).join(" + ")
               : "…"}
@@ -133,7 +132,7 @@ export function HotkeyPage({ platform, hotkey, onChange }: HotkeyPageProps) {
         </div>
       ) : (
         <div className="flex flex-col items-center gap-4 rounded-xl border bg-card px-4 py-8">
-          <Kbd className="h-11 border border-b-[3px] px-4 text-lg text-foreground">{hotkey}</Kbd>
+          <Kbd className="h-11 border-b-[3px] px-4 text-lg text-foreground">{hotkey}</Kbd>
           <Button size="sm" onClick={() => setIsListening(true)}>
             Record new shortcut
           </Button>

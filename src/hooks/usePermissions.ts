@@ -32,21 +32,27 @@ export function missingPermissions(permissions: Permissions, platform: Platform)
   return missing;
 }
 
-// Re-checks on focus, which is when the user comes back from System Settings
 export function usePermissions() {
   const [permissions, setPermissions] = useState<Permissions | null>(null);
 
+  // Only a failed request reports "blocked", so a later check must not reset it
   const refresh = useCallback(async () => {
-    setPermissions(await checkPermissions());
+    const next = await checkPermissions();
+    setPermissions((prev) =>
+      prev?.microphone === "blocked" && next.microphone === "undetermined"
+        ? { ...next, microphone: "blocked" }
+        : next,
+    );
   }, []);
 
   const requestMicrophone = useCallback(async () => {
-    await invoke("request_microphone_permission");
-    await refresh();
-  }, [refresh]);
+    const microphone = await invoke<MicPermission>("request_microphone_permission");
+    setPermissions((prev) => prev && { ...prev, microphone });
+  }, []);
 
   useEffect(() => {
     refresh();
+    // Focus is when the user comes back from System Settings
     window.addEventListener("focus", refresh);
     return () => window.removeEventListener("focus", refresh);
   }, [refresh]);

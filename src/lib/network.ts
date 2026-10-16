@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export const DEFAULT_PORT = 8765;
+
 export type NetworkMode = "local" | "client_only" | "server_only";
 
 export interface NetworkConfig {
@@ -12,12 +14,10 @@ export async function getNetworkConfig(): Promise<NetworkConfig> {
   return await invoke("get_network_config");
 }
 
-export interface NetworkUpdate {
-  mode: NetworkMode;
-  serverUrl: string | null;
-  serverPort: number | null;
-}
-
-export async function setNetworkConfig(update: NetworkUpdate): Promise<void> {
-  await invoke("set_network_config", { ...update });
+export async function setNetworkConfig(config: NetworkConfig): Promise<void> {
+  await invoke("set_network_config", {
+    mode: config.mode,
+    serverUrl: config.server_url,
+    serverPort: config.server_port,
+  });
 }

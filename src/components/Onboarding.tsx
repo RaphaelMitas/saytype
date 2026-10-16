@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
 import { PermissionList } from "@/components/PermissionList";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -8,19 +6,12 @@ import appIcon from "../../src-tauri/icons/128x128@2x.png";
 
 interface OnboardingProps {
   platform: Platform;
+  hotkey: string;
   onComplete: () => void;
 }
 
-export function Onboarding({ platform, onComplete }: OnboardingProps) {
+export function Onboarding({ platform, hotkey, onComplete }: OnboardingProps) {
   const { permissions, requestMicrophone } = usePermissions();
-  const [hotkey, setHotkey] = useState<string | null>(null);
-
-  useEffect(() => {
-    invoke<{ label: string }>("get_current_hotkey")
-      .then((config) => setHotkey(config.label))
-      .catch(console.error);
-  }, []);
-
   const done = permissions !== null && missingPermissions(permissions, platform).length === 0;
 
   return (
@@ -29,7 +20,7 @@ export function Onboarding({ platform, onComplete }: OnboardingProps) {
         <img src={appIcon} alt="" className="size-14" />
         <h1 className="text-lg font-semibold">Set up Saytype</h1>
         <p className="text-sm text-muted-foreground">
-          Hold <Kbd>{hotkey ?? "the hotkey"}</Kbd>, speak, release. Your words appear at the cursor.
+          Hold <Kbd>{hotkey}</Kbd>, speak, release. Your words appear at the cursor.
         </p>
       </div>
       {permissions && (

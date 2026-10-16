@@ -6,15 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useCopied } from "@/hooks/useCopied";
 import type { Platform } from "@/hooks/usePermissions";
 import {
+  DEFAULT_PORT,
   type NetworkConfig,
   type NetworkMode,
-  type NetworkUpdate,
   setNetworkConfig,
 } from "@/lib/network";
-
-const DEFAULT_PORT = 8765;
 
 const MODES: { value: NetworkMode; label: string; hint: string }[] = [
   { value: "local", label: "Local", hint: "Transcription runs entirely on-device." },
@@ -32,27 +31,32 @@ const MODES: { value: NetworkMode; label: string; hint: string }[] = [
 
 interface ModePageProps {
   platform: Platform;
-  network: NetworkConfig;
+  running: NetworkConfig;
+  saved: NetworkConfig;
+  onSaved: (config: NetworkConfig) => void;
   initializing: boolean;
 }
 
-export function ModePage({ platform, network, initializing }: ModePageProps) {
-  const [mode, setMode] = useState(network.mode);
-  const [serverUrl, setServerUrl] = useState(network.server_url ?? "");
-  const [serverPort, setServerPort] = useState(network.server_port ?? DEFAULT_PORT);
+export function ModePage({ platform, running, saved, onSaved, initializing }: ModePageProps) {
+  const [serverUrl, setServerUrl] = useState(saved.server_url ?? "");
   const [connectionStatus, setConnectionStatus] = useState<string | null>(null);
-  const [needsRestart, setNeedsRestart] = useState(false);
   const [localIp, setLocalIp] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopied();
+  const port = saved.server_port ?? DEFAULT_PORT;
+  const needsRestart =
+    saved.mode !== running.mode ||
+    saved.server_url !== running.server_url ||
+    saved.server_port !== running.server_port;
 
   useEffect(() => {
     invoke<string>("get_local_ip").then(setLocalIp).catch(console.error);
   }, []);
 
-  const saveAndRestart = async (config: NetworkUpdate) => {
+  const save = async (config: NetworkConfig, restart: boolean) => {
     try {
       await setNetworkConfig(config);
-      if (!(await invoke<boolean>("restart_app"))) setNeedsRestart(true);
+      onSaved(config);
+      if (restart) await invoke("restart_app");
     } catch (error) {
       console.error("Failed to save network config:", error);
     }
@@ -60,23 +64,15 @@ export function ModePage({ platform, network, initializing }: ModePageProps) {
 
   const handleModeChange = (value: string) => {
     const next = MODES.find((m) => m.value === value);
-    if (!next || next.value === mode) return;
-    setMode(next.value);
-    saveAndRestart({
-      mode: next.value,
-      serverUrl: next.value === "client_only" ? serverUrl || null : null,
-      serverPort: next.value === "server_only" ? serverPort : null,
-    });
-  };
-
-  const handlePortChange = async (port: number) => {
-    setServerPort(port);
-    if (mode !== "server_only") return;
-    try {
-      await setNetworkConfig({ mode, serverUrl: null, serverPort: port });
-    } catch (error) {
-      console.error("Failed to save server port:", error);
-    }
+    if (!next || next.value === saved.mode) return;
+    save(
+      {
+        mode: next.value,
+        server_url: next.value === "client_only" ? serverUrl || null : null,
+        server_port: next.value === "server_only" ? port : null,
+      },
+      true,
+    );
   };
 
   const handleTestConnection = async () => {
@@ -89,7 +85,7 @@ export function ModePage({ platform, network, initializing }: ModePageProps) {
     }
   };
 
-  const shareUrl = localIp ? `http://${localIp}:${serverPort}` : null;
+  const shareUrl = localIp ? `http://${localIp}:${port}` : null;
 
   return (
     <>
@@ -105,7 +101,7 @@ export function ModePage({ platform, network, initializing }: ModePageProps) {
       {platform !== "windows" && (
         <ToggleGroup
           type="single"
-          value={mode}
+          value={saved.mode}
           onValueChange={handleModeChange}
           spacing={0}
           className="grid w-full grid-cols-3 gap-0.5 rounded-lg bg-muted p-0.5"
@@ -129,7 +125,7 @@ export function ModePage({ platform, network, initializing }: ModePageProps) {
         </p>
       )}
 
-      {mode === "client_only" && (
+      {saved.mode === "client_only" && (
         <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="server-url">Server URL</Label>
@@ -153,7 +149,9 @@ export function ModePage({ platform, network, initializing }: ModePageProps) {
             <Button
               size="sm"
               disabled={!serverUrl}
-              onClick={() => saveAndRestart({ mode, serverUrl, serverPort: null })}
+              onClick={() =>
+                save({ mode: saved.mode, server_url: serverUrl, server_port: null }, true)
+              }
             >
               Apply
             </Button>
@@ -161,7 +159,7 @@ export function ModePage({ platform, network, initializing }: ModePageProps) {
         </div>
       )}
 
-      {mode === "server_only" && (
+      {saved.mode === "server_only" && (
         <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="server-port">Port</Label>
@@ -170,19 +168,17 @@ export function ModePage({ platform, network, initializing }: ModePageProps) {
               type="number"
               min={1}
               max={65535}
-              value={serverPort}
-              onChange={(e) => handlePortChange(parseInt(e.target.value, 10) || DEFAULT_PORT)}
+              value={port}
+              onChange={(e) =>
+                save({ ...saved, server_port: parseInt(e.target.value, 10) || DEFAULT_PORT }, false)
+              }
             />
           </div>
           {!initializing && shareUrl && (
             <Button
               variant="outline"
               className="justify-between font-mono"
-              onClick={() => {
-                navigator.clipboard.writeText(shareUrl);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              }}
+              onClick={() => copy(shareUrl)}
             >
               {shareUrl}
               {copied ? <Check /> : <Copy />}
@@ -192,7 +188,9 @@ export function ModePage({ platform, network, initializing }: ModePageProps) {
       )}
 
       {platform !== "windows" && (
-        <p className="text-xs text-muted-foreground">{MODES.find((m) => m.value === mode)?.hint}</p>
+        <p className="text-xs text-muted-foreground">
+          {MODES.find((m) => m.value === saved.mode)?.hint}
+        </p>
       )}
     </>
   );

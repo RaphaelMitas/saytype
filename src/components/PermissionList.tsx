@@ -10,10 +10,13 @@ import {
   type PrivacyPane,
 } from "@/hooks/usePermissions";
 
+type ActionVariant = "default" | "outline";
+
 interface PermissionListProps {
   permissions: Permissions;
   platform: Platform;
   onRequestMicrophone: () => void;
+  actionVariant?: ActionVariant;
 }
 
 interface Row {
@@ -30,9 +33,9 @@ const granted = (
   </Badge>
 );
 
-function openSettingsButton(pane: PrivacyPane) {
+function openSettingsButton(pane: PrivacyPane, variant: ActionVariant) {
   return (
-    <Button variant="outline" size="sm" onClick={() => openPrivacySettings(pane)}>
+    <Button variant={variant} size="sm" onClick={() => openPrivacySettings(pane)}>
       Open Settings
     </Button>
   );
@@ -42,6 +45,7 @@ function microphoneRow(
   permissions: Permissions,
   platform: Platform,
   onRequestMicrophone: () => void,
+  variant: ActionVariant,
 ): Row {
   const row = { icon: Mic, title: "Microphone", description: "To hear you" };
   switch (permissions.microphone) {
@@ -51,7 +55,7 @@ function microphoneRow(
       return {
         ...row,
         action: (
-          <Button variant="outline" size="sm" onClick={onRequestMicrophone}>
+          <Button variant={variant} size="sm" onClick={onRequestMicrophone}>
             Allow
           </Button>
         ),
@@ -63,7 +67,7 @@ function microphoneRow(
           platform === "windows" ? (
             <Badge variant="destructive">Denied</Badge>
           ) : (
-            openSettingsButton("microphone")
+            openSettingsButton("microphone", variant)
           ),
       };
     case "blocked":
@@ -79,21 +83,26 @@ export function PermissionList({
   permissions,
   platform,
   onRequestMicrophone,
+  actionVariant = "outline",
 }: PermissionListProps) {
-  const rows: Row[] = [microphoneRow(permissions, platform, onRequestMicrophone)];
+  const rows: Row[] = [microphoneRow(permissions, platform, onRequestMicrophone, actionVariant)];
   if (platform !== "windows") {
     rows.push(
       {
         icon: Shield,
         title: "Accessibility",
         description: "To paste at the cursor",
-        action: permissions.accessibility ? granted : openSettingsButton("accessibility"),
+        action: permissions.accessibility
+          ? granted
+          : openSettingsButton("accessibility", actionVariant),
       },
       {
         icon: Keyboard,
         title: "Input Monitoring",
         description: "To catch the hotkey",
-        action: permissions.input_monitoring ? granted : openSettingsButton("input_monitoring"),
+        action: permissions.input_monitoring
+          ? granted
+          : openSettingsButton("input_monitoring", actionVariant),
       },
     );
   }
