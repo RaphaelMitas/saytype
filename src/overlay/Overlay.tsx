@@ -15,7 +15,8 @@ type OverlayEvent =
   | { phase: "hidden" };
 
 interface View {
-  phase: OverlayEvent["phase"];
+  phase: Exclude<OverlayEvent["phase"], "hidden">;
+  visible: boolean;
   style: PreviewStyle;
   hotkey: string;
   startedAt: number;
@@ -26,7 +27,8 @@ interface View {
 }
 
 const INITIAL: View = {
-  phase: "hidden",
+  phase: "empty",
+  visible: false,
   style: "panel",
   hotkey: "",
   startedAt: 0,
@@ -55,6 +57,7 @@ function reduce(view: View, event: OverlayEvent): View {
       return {
         ...INITIAL,
         phase: "listening",
+        visible: true,
         style: event.style,
         hotkey: event.hotkey,
         startedAt: Date.now(),
@@ -77,6 +80,9 @@ function reduce(view: View, event: OverlayEvent): View {
       return { ...view, phase: "pasted", settled: event.text, unsettled: "" };
     case "failed":
       return { ...view, phase: "failed", message: event.message };
+    case "hidden":
+      // Keep the outcome on screen while it fades out
+      return { ...view, visible: false };
     default:
       return { ...view, phase: event.phase };
   }
@@ -282,7 +288,7 @@ export function Overlay() {
     <div
       className={cn(
         "flex h-full items-end justify-center p-3 transition-opacity duration-200",
-        view.phase === "hidden" && "opacity-0",
+        !view.visible && "opacity-0",
       )}
     >
       {view.style === "compact" ? (

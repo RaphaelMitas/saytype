@@ -17,7 +17,7 @@ lazy_static::lazy_static! {
     static ref HELD_KEYS: Mutex<HashSet<i64>> = Mutex::new(HashSet::new());
 }
 
-/// Clear the held keys set (called when hotkey config changes)
+/// Called when the hotkey changes; a hotkey still down gets released as usual
 pub fn clear_held_keys(app_handle: &tauri::AppHandle) {
     if let Ok(mut held) = HELD_KEYS.lock() {
         held.clear();

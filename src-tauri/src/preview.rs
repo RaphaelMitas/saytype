@@ -24,7 +24,7 @@ static SESSION: AtomicU64 = AtomicU64::new(0);
 /// The session still recording, 0 once the hotkey is released.
 static LIVE: AtomicU64 = AtomicU64::new(0);
 /// Bumped on every show and outcome, so only the latest outcome's timer hides the overlay.
-/// Locked while showing or hiding, so a timer can't hide a show that slipped in after its check.
+/// Locked around every show, outcome and hide, so none can slip between another's check and act.
 static SHOWN: Mutex<u64> = Mutex::new(0);
 
 #[derive(Clone, Serialize)]
@@ -84,25 +84,24 @@ pub fn start(app: &AppHandle) {
     if style == PreviewStyle::Off {
         return;
     }
-    let session = SESSION.fetch_add(1, Ordering::SeqCst) + 1;
-    LIVE.store(session, Ordering::SeqCst);
-
     let hotkey = app
         .try_state::<AppState>()
         .and_then(|state| state.current_hotkey.lock().ok().map(|h| h.label.clone()))
         .unwrap_or_default();
-    {
+    let session = {
         let mut shown = lock_shown();
         *shown += 1;
+        let session = SESSION.fetch_add(1, Ordering::SeqCst) + 1;
+        LIVE.store(session, Ordering::SeqCst);
         show_on_cursor_screen(app);
         send(app, OverlayEvent::Listening { style, hotkey });
-    }
+        session
+    };
 
     tauri::async_runtime::spawn(level_loop(app.clone(), session));
     tauri::async_runtime::spawn(preview_loop(app.clone(), session));
 }
 
-/// Hand the returned session to [`finish`].
 pub fn stop(app: &AppHandle) -> u64 {
     let session = LIVE.swap(0, Ordering::SeqCst);
     if session != 0 {
@@ -112,20 +111,19 @@ pub fn stop(app: &AppHandle) -> u64 {
 }
 
 pub fn finish(app: &AppHandle, session: u64, outcome: Outcome) {
-    if session == 0 || SESSION.load(Ordering::SeqCst) != session {
-        return;
-    }
-    send(
-        app,
-        match outcome {
-            Outcome::Pasted(text) => OverlayEvent::Pasted { text },
-            Outcome::Empty => OverlayEvent::Empty,
-            Outcome::Failed(message) => OverlayEvent::Failed { message },
-        },
-    );
-
     let shown = {
         let mut current = lock_shown();
+        if session == 0 || SESSION.load(Ordering::SeqCst) != session {
+            return;
+        }
+        send(
+            app,
+            match outcome {
+                Outcome::Pasted(text) => OverlayEvent::Pasted { text },
+                Outcome::Empty => OverlayEvent::Empty,
+                Outcome::Failed(message) => OverlayEvent::Failed { message },
+            },
+        );
         *current += 1;
         *current
     };
