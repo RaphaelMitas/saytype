@@ -243,9 +243,13 @@ def word_rows(word: dict, voices, model: Model, cache_dir: Path, on_clip) -> lis
     return rows
 
 
-def example_rows(example: dict, model: Model, cache_dir: Path) -> list[dict]:
+def example_cache(example: dict, cache_dir: Path) -> Path:
     key = cache_key(id=example["id"], text=example["text"])
-    path = cache_dir / "examples" / f"{key}.npz"
+    return cache_dir / "examples" / f"{key}.npz"
+
+
+def example_rows(example: dict, model: Model, cache_dir: Path) -> list[dict]:
+    path = example_cache(example, cache_dir)
     if path.exists():
         return load_rows(path)
     audio, sr = sf.read(example["audio"], dtype="float32")
@@ -383,3 +387,10 @@ def run(job_path: Path, model, model_name: str) -> None:
     if json.loads(job_path.read_text())["spec"] != job["spec"]:
         raise RuntimeError("Superseded by a newer training run")
     write_head(weights, Path(job["head_path"]), Path(job["meta_path"]), job["spec"])
+
+    # Removed words and deleted examples go too, including features of the user's voice
+    used = {word_cache(word, voices, cache_dir) for word in words}
+    used |= {example_cache(example, cache_dir) for example in job["examples"]}
+    for cached in cache_dir.glob("*/*.npz"):
+        if cached not in used:
+            cached.unlink(missing_ok=True)

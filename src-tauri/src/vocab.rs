@@ -153,10 +153,10 @@ fn collapse_whitespace(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Whole-word and case-insensitive, so "Saytype's" counts and "Saytypes" doesn't
+/// Whole-word, ignoring case and spacing, so "Saytype's" counts and "Saytypes" doesn't
 fn mentions(text: &str, word: &str) -> bool {
-    let text = text.to_lowercase();
-    let word = word.to_lowercase();
+    let text = collapse_whitespace(text).to_lowercase();
+    let word = collapse_whitespace(word).to_lowercase();
     text.match_indices(&word).any(|(at, _)| {
         let before = text[..at].chars().next_back();
         let after = text[at + word.len()..].chars().next();
@@ -479,10 +479,10 @@ pub fn remove_word(app_handle: tauri::AppHandle, word: String) -> Result<Vec<Wor
     let (kept, gone): (Vec<_>, Vec<_>) = read_examples(&vocab)
         .into_iter()
         .partition(|e| config.words.iter().any(|w| mentions(&e.text, &w.word)));
+    storage::write_json(&examples_index(&vocab), &kept)?;
     for example in gone {
         let _ = std::fs::remove_file(example_audio(&vocab, &example.id));
     }
-    storage::write_json(&examples_index(&vocab), &kept)?;
     changed(&app_handle);
     current_views()
 }
@@ -695,7 +695,7 @@ mod tests {
     fn mentions_matches_whole_words_ignoring_case() {
         assert!(mentions("The FLATSBY app", "Flatsby"));
         assert!(mentions("Saytype's settings", "Saytype"));
-        assert!(mentions("I use Mac Book daily", "Mac Book"));
+        assert!(mentions("I use Mac  Book daily", "Mac Book"));
         assert!(!mentions("Saytypes everywhere", "Saytype"));
         assert!(!mentions("pnpmx", "pnpm"));
     }
