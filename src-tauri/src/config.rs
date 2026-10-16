@@ -197,6 +197,9 @@ fn save_config(config: &AppConfig) -> Result<(), String> {
     // Renamed into place, so a concurrent load never reads a half-written file
     let temp = path.with_extension("json.tmp");
     fs::write(&temp, json).map_err(|e| format!("Failed to write config: {}", e))?;
+    if let Ok(meta) = fs::metadata(&path) {
+        let _ = fs::set_permissions(&temp, meta.permissions());
+    }
     fs::rename(&temp, &path).map_err(|e| format!("Failed to write config: {}", e))?;
 
     println!("[CONFIG] Saved config to {:?}", path);

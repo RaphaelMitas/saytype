@@ -53,7 +53,7 @@ public func saytypeFmRespond(
         ok.pointee = 1
         return strdup(rewritten)
     case .failure(let error):
-        return strdup(String(describing: error))
+        return strdup(error.localizedDescription)
     }
 }
 
