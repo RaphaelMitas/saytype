@@ -35,16 +35,16 @@ function parsePort(text: string): number | null {
   return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
 }
 
-// null while the chosen mode is missing a URL or has an invalid port
-function toConfig(mode: NetworkMode, serverUrl: string, port: number | null): NetworkConfig | null {
-  switch (mode) {
-    case "local":
-      return { mode, server_url: null, server_port: null };
-    case "client_only":
-      return serverUrl ? { mode, server_url: serverUrl, server_port: null } : null;
-    case "server_only":
-      return port ? { mode, server_url: null, server_port: port } : null;
-  }
+// Keeps the URL and port whatever the mode, so switching back finds them again
+function toConfig(
+  mode: NetworkMode,
+  serverUrl: string,
+  port: number | null,
+  running: NetworkConfig,
+): NetworkConfig | null {
+  if (mode === "client_only" && !serverUrl) return null;
+  if (mode === "server_only" && port === null) return null;
+  return { mode, server_url: serverUrl || null, server_port: port ?? running.server_port };
 }
 
 interface ModePageProps {
@@ -67,7 +67,7 @@ export function ModePage({ platform, running, initializing }: ModePageProps) {
   }, []);
 
   const port = parsePort(portText);
-  const draft = toConfig(mode, serverUrl, port);
+  const draft = toConfig(mode, serverUrl, port, running);
   const changed =
     draft !== null &&
     (draft.mode !== running.mode ||
