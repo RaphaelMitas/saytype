@@ -10,9 +10,10 @@ mod sidecar;
 mod text_insertion;
 mod transcriber;
 mod tray;
+mod updater;
 
 use std::sync::Arc;
-use tauri::{Emitter, WindowEvent};
+use tauri::{Emitter, RunEvent, WindowEvent};
 use tokio::sync::Mutex;
 
 pub use config::HotkeyConfig;
@@ -99,6 +100,10 @@ async fn restart_app() -> Result<bool, String> {
         // Dev mode: can't restart because the Tauri CLI owns the process lifecycle
         return Ok(false);
     }
+    relaunch()
+}
+
+pub(crate) fn relaunch() -> ! {
     #[allow(unused_variables)]
     if let Ok(exe) = std::env::current_exe() {
         #[cfg(target_os = "macos")]
@@ -121,6 +126,21 @@ async fn restart_app() -> Result<bool, String> {
         }
     }
     std::process::exit(0);
+}
+
+#[tauri::command]
+fn get_update_status() -> updater::UpdateStatus {
+    updater::status()
+}
+
+#[tauri::command]
+async fn check_for_updates(app_handle: tauri::AppHandle) {
+    updater::check(&app_handle).await;
+}
+
+#[tauri::command]
+async fn install_update(app_handle: tauri::AppHandle) -> Result<(), String> {
+    updater::install_and_restart(&app_handle)
 }
 
 #[tauri::command]
@@ -328,6 +348,7 @@ pub fn run() {
     let app_state = AppState::new(app_config.hotkey);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
         .setup(|app| {
             // A regular app's windows can't join another app's fullscreen Space, which hides the preview
@@ -391,6 +412,8 @@ pub fn run() {
                 println!("[SETUP] Server-only mode — skipping hotkey and permissions setup");
             }
 
+            updater::start(&app_handle);
+
             // Initialize transcription backend (local sidecar, remote server, or HTTP server)
             let handle_clone = app_handle.clone();
             let e2e_audio = e2e::audio_path();
@@ -438,7 +461,17 @@ pub fn run() {
             restart_app,
             get_local_ip,
             get_platform,
+            get_update_status,
+            check_for_updates,
+            install_update,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_, event| {
+            if let RunEvent::Exit = event {
+                if let Err(e) = updater::install_pending() {
+                    eprintln!("[UPDATER] Install on quit failed: {}", e);
+                }
+            }
+        });
 }
