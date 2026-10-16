@@ -256,7 +256,7 @@ async fn rewrite(model: Model, prompt: &str, text: &str) -> Result<String, Strin
     Ok(rewritten.to_string())
 }
 
-/// The text to paste, unchanged when post-processing is off. An error means paste the raw text.
+/// An error means paste the raw text.
 pub async fn apply(text: &str) -> Result<String, String> {
     let settings = config::load_config().post_processing;
     if !settings.enabled {
