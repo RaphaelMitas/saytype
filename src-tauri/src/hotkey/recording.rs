@@ -1,22 +1,23 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tauri::{Emitter, Manager};
 
 use crate::preview::{self, Outcome};
 use crate::{audio, text_insertion, transcriber, AppState};
 
 static HOTKEY_ACTIVE: AtomicBool = AtomicBool::new(false);
+static PRESSES: AtomicU64 = AtomicU64::new(0);
 
 pub(super) fn set_hotkey_held(app_handle: &tauri::AppHandle, held: bool) {
     if HOTKEY_ACTIVE.swap(held, Ordering::SeqCst) != held {
         if held {
-            on_hotkey_pressed(app_handle);
+            on_hotkey_pressed(app_handle, PRESSES.fetch_add(1, Ordering::SeqCst) + 1);
         } else {
             on_hotkey_released(app_handle);
         }
     }
 }
 
-fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
+fn on_hotkey_pressed(app_handle: &tauri::AppHandle, press: u64) {
     println!("[DEBUG] Hotkey pressed - starting recording");
     let handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
@@ -39,7 +40,8 @@ fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
 
         // Held until the overlay is up, so a quick release waits for the press to finish
         let mut is_recording = state.is_recording.lock().await;
-        if !HOTKEY_ACTIVE.load(Ordering::SeqCst) {
+        // Its own release, or a newer press, already went through while this one queued
+        if !HOTKEY_ACTIVE.load(Ordering::SeqCst) || PRESSES.load(Ordering::SeqCst) != press {
             return;
         }
 

@@ -219,8 +219,9 @@ fn show_on_cursor_screen(app: &AppHandle) {
             let x = area.position.x as f64 + (area.size.width as f64 - WIDTH * scale) / 2.0;
             let y =
                 area.position.y as f64 + area.size.height as f64 - (HEIGHT + BOTTOM_MARGIN) * scale;
-            let _ = window.set_size(tauri::PhysicalSize::new(WIDTH * scale, HEIGHT * scale));
+            // Move first: arriving on a screen with another scale rescales the window
             let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+            let _ = window.set_size(tauri::PhysicalSize::new(WIDTH * scale, HEIGHT * scale));
         }
     }
     let _ = window.show();
