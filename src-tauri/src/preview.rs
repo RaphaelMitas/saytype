@@ -1,13 +1,11 @@
 //! Display only: the paste still comes from the single pass on release.
 
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{
-    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Monitor, WebviewUrl,
-    WebviewWindowBuilder,
-};
+use tauri::{AppHandle, Emitter, Manager, Monitor, WebviewUrl, WebviewWindowBuilder};
 
 use crate::config::{self, PreviewStyle};
 use crate::{audio, transcriber, AppState};
@@ -26,7 +24,8 @@ static SESSION: AtomicU64 = AtomicU64::new(0);
 /// The session still recording, 0 once the hotkey is released.
 static LIVE: AtomicU64 = AtomicU64::new(0);
 /// Bumped on every show and outcome, so only the latest outcome's timer hides the overlay.
-static SHOWN: AtomicU64 = AtomicU64::new(0);
+/// Locked while showing or hiding, so a timer can't hide a show that slipped in after its check.
+static SHOWN: Mutex<u64> = Mutex::new(0);
 
 #[derive(Clone, Serialize)]
 #[serde(tag = "phase", rename_all = "snake_case")]
@@ -92,9 +91,12 @@ pub fn start(app: &AppHandle) {
         .try_state::<AppState>()
         .and_then(|state| state.current_hotkey.lock().ok().map(|h| h.label.clone()))
         .unwrap_or_default();
-    SHOWN.fetch_add(1, Ordering::SeqCst);
-    show_on_cursor_screen(app);
-    send(app, OverlayEvent::Listening { style, hotkey });
+    {
+        let mut shown = lock_shown();
+        *shown += 1;
+        show_on_cursor_screen(app);
+        send(app, OverlayEvent::Listening { style, hotkey });
+    }
 
     tauri::async_runtime::spawn(level_loop(app.clone(), session));
     tauri::async_runtime::spawn(preview_loop(app.clone(), session));
@@ -122,21 +124,33 @@ pub fn finish(app: &AppHandle, session: u64, outcome: Outcome) {
         },
     );
 
-    let shown = SHOWN.fetch_add(1, Ordering::SeqCst) + 1;
+    let shown = {
+        let mut current = lock_shown();
+        *current += 1;
+        *current
+    };
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(LINGER).await;
-        if SHOWN.load(Ordering::SeqCst) != shown {
-            return;
+        {
+            let current = lock_shown();
+            if *current != shown {
+                return;
+            }
+            send(&app, OverlayEvent::Hidden);
         }
-        send(&app, OverlayEvent::Hidden);
         tokio::time::sleep(FADE).await;
-        if SHOWN.load(Ordering::SeqCst) == shown {
+        let current = lock_shown();
+        if *current == shown {
             if let Some(window) = app.get_webview_window(LABEL) {
                 let _ = window.hide();
             }
         }
     });
+}
+
+fn lock_shown() -> MutexGuard<'static, u64> {
+    SHOWN.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 async fn level_loop(app: AppHandle, session: u64) {
@@ -189,15 +203,27 @@ fn show_on_cursor_screen(app: &AppHandle) {
         return;
     };
     if let Some(monitor) = cursor_monitor(app) {
-        // Logical units, because a physical position is converted with the scale of the screen the window is leaving
         let scale = monitor.scale_factor();
         let area = monitor.work_area();
-        let origin = area.position.to_logical::<f64>(scale);
-        let size = area.size.to_logical::<f64>(scale);
-        let x = origin.x + (size.width - WIDTH) / 2.0;
-        let y = origin.y + size.height - HEIGHT - BOTTOM_MARGIN;
-        let _ = window.set_size(LogicalSize::new(WIDTH, HEIGHT));
-        let _ = window.set_position(LogicalPosition::new(x, y));
+        // macOS converts a physical position with the scale of the screen the window is leaving
+        #[cfg(target_os = "macos")]
+        {
+            let origin = area.position.to_logical::<f64>(scale);
+            let size = area.size.to_logical::<f64>(scale);
+            let x = origin.x + (size.width - WIDTH) / 2.0;
+            let y = origin.y + size.height - HEIGHT - BOTTOM_MARGIN;
+            let _ = window.set_size(tauri::LogicalSize::new(WIDTH, HEIGHT));
+            let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+        }
+        // Windows converts a logical one that way instead
+        #[cfg(not(target_os = "macos"))]
+        {
+            let x = area.position.x as f64 + (area.size.width as f64 - WIDTH * scale) / 2.0;
+            let y =
+                area.position.y as f64 + area.size.height as f64 - (HEIGHT + BOTTOM_MARGIN) * scale;
+            let _ = window.set_size(tauri::PhysicalSize::new(WIDTH * scale, HEIGHT * scale));
+            let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+        }
     }
     let _ = window.show();
 }

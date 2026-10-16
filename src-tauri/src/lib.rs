@@ -12,7 +12,7 @@ mod transcriber;
 mod tray;
 
 use std::sync::Arc;
-use tauri::{Emitter, Manager, WindowEvent};
+use tauri::{Emitter, WindowEvent};
 use tokio::sync::Mutex;
 
 pub use config::HotkeyConfig;
@@ -418,9 +418,12 @@ pub fn run() {
                 window.hide().unwrap();
                 api.prevent_close();
                 #[cfg(target_os = "macos")]
-                let _ = window
-                    .app_handle()
-                    .set_activation_policy(tauri::ActivationPolicy::Accessory);
+                {
+                    use tauri::Manager;
+                    let _ = window
+                        .app_handle()
+                        .set_activation_policy(tauri::ActivationPolicy::Accessory);
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
