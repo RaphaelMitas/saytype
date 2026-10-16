@@ -1,7 +1,6 @@
 //! Display only: the paste still comes from the single pass on release.
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -24,8 +23,7 @@ static SESSION: AtomicU64 = AtomicU64::new(0);
 /// The session still recording, 0 once the hotkey is released.
 static LIVE: AtomicU64 = AtomicU64::new(0);
 /// Bumped on every show and outcome, so only the latest outcome's timer hides the overlay.
-/// Locked around every show, outcome and hide, so none can slip between another's check and act.
-static SHOWN: Mutex<u64> = Mutex::new(0);
+static SHOWN: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Serialize)]
 #[serde(tag = "phase", rename_all = "snake_case")]
@@ -61,21 +59,6 @@ pub fn create_window(app: &AppHandle) -> tauri::Result<()> {
         .visible(false)
         .build()?;
     window.set_ignore_cursor_events(true)?;
-    #[cfg(target_os = "macos")]
-    join_fullscreen_spaces(&window)?;
-    Ok(())
-}
-
-/// Without this a background app's window stays off another app's fullscreen Space.
-#[cfg(target_os = "macos")]
-fn join_fullscreen_spaces(window: &tauri::WebviewWindow) -> tauri::Result<()> {
-    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
-    let ns_window = window.ns_window()?.cast::<NSWindow>();
-    // SAFETY: Tauri owns the NSWindow for the window's lifetime, and setup runs on the main thread
-    let ns_window = unsafe { &*ns_window };
-    ns_window.setCollectionBehavior(
-        ns_window.collectionBehavior() | NSWindowCollectionBehavior::FullScreenAuxiliary,
-    );
     Ok(())
 }
 
@@ -88,15 +71,11 @@ pub fn start(app: &AppHandle) {
         .try_state::<AppState>()
         .and_then(|state| state.current_hotkey.lock().ok().map(|h| h.label.clone()))
         .unwrap_or_default();
-    let session = {
-        let mut shown = lock_shown();
-        *shown += 1;
-        let session = SESSION.fetch_add(1, Ordering::SeqCst) + 1;
-        LIVE.store(session, Ordering::SeqCst);
-        show_on_cursor_screen(app);
-        send(app, OverlayEvent::Listening { style, hotkey });
-        session
-    };
+    let session = SESSION.fetch_add(1, Ordering::SeqCst) + 1;
+    LIVE.store(session, Ordering::SeqCst);
+    SHOWN.fetch_add(1, Ordering::SeqCst);
+    show_on_cursor_screen(app);
+    send(app, OverlayEvent::Listening { style, hotkey });
 
     tauri::async_runtime::spawn(level_loop(app.clone(), session));
     tauri::async_runtime::spawn(preview_loop(app.clone(), session));
@@ -111,44 +90,33 @@ pub fn stop(app: &AppHandle) -> u64 {
 }
 
 pub fn finish(app: &AppHandle, session: u64, outcome: Outcome) {
-    let shown = {
-        let mut current = lock_shown();
-        if session == 0 || SESSION.load(Ordering::SeqCst) != session {
-            return;
-        }
-        send(
-            app,
-            match outcome {
-                Outcome::Pasted(text) => OverlayEvent::Pasted { text },
-                Outcome::Empty => OverlayEvent::Empty,
-                Outcome::Failed(message) => OverlayEvent::Failed { message },
-            },
-        );
-        *current += 1;
-        *current
-    };
+    if session == 0 || SESSION.load(Ordering::SeqCst) != session {
+        return;
+    }
+    send(
+        app,
+        match outcome {
+            Outcome::Pasted(text) => OverlayEvent::Pasted { text },
+            Outcome::Empty => OverlayEvent::Empty,
+            Outcome::Failed(message) => OverlayEvent::Failed { message },
+        },
+    );
+
+    let shown = SHOWN.fetch_add(1, Ordering::SeqCst) + 1;
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(LINGER).await;
-        {
-            let current = lock_shown();
-            if *current != shown {
-                return;
-            }
-            send(&app, OverlayEvent::Hidden);
+        if SHOWN.load(Ordering::SeqCst) != shown {
+            return;
         }
+        send(&app, OverlayEvent::Hidden);
         tokio::time::sleep(FADE).await;
-        let current = lock_shown();
-        if *current == shown {
+        if SHOWN.load(Ordering::SeqCst) == shown {
             if let Some(window) = app.get_webview_window(LABEL) {
                 let _ = window.hide();
             }
         }
     });
-}
-
-fn lock_shown() -> MutexGuard<'static, u64> {
-    SHOWN.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 async fn level_loop(app: AppHandle, session: u64) {

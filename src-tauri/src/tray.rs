@@ -51,9 +51,6 @@ fn setup_tray_inner(app: &AppHandle, tooltip: &str) -> Result<(), Box<dyn std::e
 
 pub fn show_settings(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("settings") {
-        // In the Dock and Cmd+Tab while open, so the way back from System Settings is easy
-        #[cfg(target_os = "macos")]
-        let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
         let _ = window.show();
         let _ = window.set_focus();
     }

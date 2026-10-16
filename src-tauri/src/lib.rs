@@ -330,7 +330,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(app_state)
         .setup(|app| {
-            // A regular app's windows can't join another app's fullscreen Space, so stay an accessory app while Settings is closed
+            // A regular app's windows can't join another app's fullscreen Space, which hides the preview
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
@@ -417,13 +417,6 @@ pub fn run() {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 window.hide().unwrap();
                 api.prevent_close();
-                #[cfg(target_os = "macos")]
-                {
-                    use tauri::Manager;
-                    let _ = window
-                        .app_handle()
-                        .set_activation_policy(tauri::ActivationPolicy::Accessory);
-                }
             }
         })
         .invoke_handler(tauri::generate_handler![
