@@ -4,15 +4,21 @@ import { useEffect, useState } from "react";
 
 export type RecordingState = "initializing" | "idle" | "recording" | "processing";
 
+/** `raw` differs from `text` when post-processing rewrote it */
+export interface Transcription {
+  text: string;
+  raw: string;
+}
+
 export interface UseRecordingResult {
   state: RecordingState;
-  lastTranscription: string | null;
+  lastTranscription: Transcription | null;
   lastError: string | null;
 }
 
 export function useRecording(): UseRecordingResult {
   const [state, setState] = useState<RecordingState>("initializing");
-  const [lastTranscription, setLastTranscription] = useState<string | null>(null);
+  const [lastTranscription, setLastTranscription] = useState<Transcription | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,10 +42,13 @@ export function useRecording(): UseRecordingResult {
       setState("processing");
     });
 
-    const unlistenTranscriptionComplete = listen<string>("transcription-complete", (event) => {
-      setState("idle");
-      setLastTranscription(event.payload);
-    });
+    const unlistenTranscriptionComplete = listen<Transcription>(
+      "transcription-complete",
+      (event) => {
+        setState("idle");
+        setLastTranscription(event.payload);
+      },
+    );
 
     const unlistenTranscriptionError = listen<string>("transcription-error", (event) => {
       setState("idle");

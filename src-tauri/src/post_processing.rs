@@ -78,6 +78,7 @@ Keep the speaker's words and language.",
 #[serde(rename_all = "snake_case")]
 pub enum Model {
     #[default]
+    #[serde(other)]
     AppleIntelligence,
 }
 

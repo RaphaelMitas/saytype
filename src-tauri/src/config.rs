@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 /// Modifier key enum for hotkey configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -202,6 +203,8 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
 }
 
 pub fn update(change: impl FnOnce(&mut AppConfig)) -> Result<(), String> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut config = load_config();
     change(&mut config);
     save_config(&config)

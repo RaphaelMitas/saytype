@@ -56,6 +56,27 @@ function PreviewSetting() {
   );
 }
 
+function TranscriptBox({ label, text }: { label: string; text: string }) {
+  const { copied, copy } = useCopied();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="text-xs font-semibold text-muted-foreground">{label}</div>
+      <div className="flex items-start gap-2 rounded-lg bg-muted py-2 pr-2 pl-3 text-sm select-text">
+        <span className="flex-1 py-0.5">{text}</span>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Copy"
+          className="text-muted-foreground"
+          onClick={() => copy(text)}
+        >
+          {copied ? <Check /> : <Copy />}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 interface GeneralPageProps extends UseRecordingResult {
   selfTest: SelfTest;
   network: NetworkConfig;
@@ -74,7 +95,6 @@ export function GeneralPage({
   missingPermissions,
   onFixPermissions,
 }: GeneralPageProps) {
-  const { copied, copy } = useCopied();
   const serverOnly = network.mode === "server_only";
 
   const status = (() => {
@@ -174,21 +194,10 @@ export function GeneralPage({
       {!serverOnly && <PreviewSetting />}
 
       {lastTranscription && (
-        <div className="flex flex-col gap-1.5">
-          <div className="text-xs font-semibold text-muted-foreground">Last transcription</div>
-          <div className="flex items-start gap-2 rounded-lg bg-muted py-2 pr-2 pl-3 text-sm select-text">
-            <span className="flex-1 py-0.5">{lastTranscription}</span>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label="Copy"
-              className="text-muted-foreground"
-              onClick={() => copy(lastTranscription)}
-            >
-              {copied ? <Check /> : <Copy />}
-            </Button>
-          </div>
-        </div>
+        <TranscriptBox label="Last transcription" text={lastTranscription.text} />
+      )}
+      {lastTranscription && lastTranscription.raw !== lastTranscription.text && (
+        <TranscriptBox label="Before post-processing" text={lastTranscription.raw} />
       )}
     </>
   );

@@ -21,6 +21,14 @@ fn build_foundation_models_bridge() {
         return;
     }
 
+    // Where xcode-select points, so switching Xcode checks the SDK again
+    println!("cargo:rerun-if-env-changed=DEVELOPER_DIR");
+    for link in ["/var/select/developer_dir", "/var/db/xcode_select_link"] {
+        if Path::new(link).exists() {
+            println!("cargo:rerun-if-changed={link}");
+        }
+    }
+
     let xcrun = |args: &[&str]| -> Option<String> {
         let output = Command::new("xcrun").args(args).output().ok()?;
         output
@@ -29,14 +37,12 @@ fn build_foundation_models_bridge() {
             .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
     };
     let sdk = xcrun(&["--sdk", "macosx", "--show-sdk-path"]);
-    let framework = sdk
-        .as_ref()
-        .map(|sdk| Path::new(sdk).join("System/Library/Frameworks/FoundationModels.framework"));
-    let (Some(sdk), Some(true)) = (sdk, framework.as_ref().map(|f| f.exists())) else {
-        // A missing path counts as changed, so the check reruns until a newer Xcode is selected
-        if let Some(framework) = framework {
-            println!("cargo:rerun-if-changed={}", framework.display());
-        }
+    let has_framework = sdk.as_ref().is_some_and(|sdk| {
+        Path::new(sdk)
+            .join("System/Library/Frameworks/FoundationModels.framework")
+            .exists()
+    });
+    let (Some(sdk), true) = (sdk, has_framework) else {
         let message = "macOS SDK has no FoundationModels, post-processing is disabled. Use Xcode 26 or later.";
         if env::var(REQUIRE_VAR).as_deref() == Ok("1") {
             panic!("{message}");

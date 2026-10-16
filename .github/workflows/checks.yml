@@ -42,6 +42,8 @@ jobs:
   rust:
     name: Rust (macOS)
     runs-on: macos-15
+    env:
+      SAYTYPE_REQUIRE_FOUNDATION_MODELS: "1"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7

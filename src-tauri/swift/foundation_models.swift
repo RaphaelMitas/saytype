@@ -48,14 +48,12 @@ public func saytypeFmRespond(
         task.cancel()
         return strdup("Timed out after \(timeoutMs) ms")
     }
-    switch box.result {
+    switch box.result! {
     case .success(let rewritten):
         ok.pointee = 1
         return strdup(rewritten)
     case .failure(let error):
         return strdup(String(describing: error))
-    case nil:
-        return strdup("No response")
     }
 }
 
