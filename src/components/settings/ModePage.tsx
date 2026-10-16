@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/settings/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useCopied } from "@/hooks/useCopied";
 import type { Platform } from "@/hooks/usePermissions";
 import { restartApp } from "@/lib/app";
@@ -84,11 +84,6 @@ export function ModePage({ platform, running, initializing }: ModePageProps) {
     }
   };
 
-  const handleModeChange = (value: string) => {
-    const next = MODES.find((m) => m.value === value);
-    if (next) setMode(next.value);
-  };
-
   const handleTestConnection = async () => {
     setConnectionStatus("Connecting…");
     try {
@@ -116,24 +111,7 @@ export function ModePage({ platform, running, initializing }: ModePageProps) {
       />
 
       {platform !== "windows" && (
-        <ToggleGroup
-          type="single"
-          value={mode}
-          onValueChange={handleModeChange}
-          spacing={0}
-          className="grid w-full grid-cols-3 gap-0.5 rounded-lg bg-muted p-0.5"
-        >
-          {MODES.map(({ value, label }) => (
-            <ToggleGroupItem
-              key={value}
-              value={value}
-              size="sm"
-              className="rounded-md! text-muted-foreground hover:bg-transparent data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm dark:data-[state=on]:bg-input"
-            >
-              {label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        <SegmentedControl value={mode} options={MODES} onChange={setMode} />
       )}
 
       {mode === "client_only" && (

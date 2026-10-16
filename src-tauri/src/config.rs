@@ -101,6 +101,16 @@ impl Default for AppMode {
     }
 }
 
+/// How the on-screen preview looks while recording
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PreviewStyle {
+    #[default]
+    Panel,
+    Compact,
+    Off,
+}
+
 /// App configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
@@ -111,6 +121,8 @@ pub struct AppConfig {
     pub server_url: Option<String>,
     #[serde(default = "default_server_port")]
     pub server_port: Option<u16>,
+    #[serde(default)]
+    pub preview: PreviewStyle,
 }
 
 fn default_server_port() -> Option<u16> {

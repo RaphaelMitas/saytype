@@ -1,17 +1,59 @@
 import { cn } from "cn";
 import { Check, Copy, Mic } from "lucide-react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useCopied } from "@/hooks/useCopied";
 import type { UseRecordingResult } from "@/hooks/useRecording";
 import type { SelfTest } from "@/hooks/useSelfTest";
 import { DEFAULT_PORT, type NetworkConfig } from "@/lib/network";
+import { getPreviewStyle, type PreviewStyle, setPreviewStyle } from "@/lib/preview";
 
 function joinNames(names: string[]): string {
   return names.length > 1
     ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
     : names.join("");
+}
+
+const PREVIEW_STYLES: { value: PreviewStyle; label: string; hint: string }[] = [
+  {
+    value: "panel",
+    label: "Panel",
+    hint: "Up to three lines of what you're saying at the bottom of the screen.",
+  },
+  {
+    value: "compact",
+    label: "Compact",
+    hint: "One line with the latest words at the bottom of the screen.",
+  },
+  { value: "off", label: "Off", hint: "Nothing on screen while you talk." },
+];
+
+function PreviewSetting() {
+  const [style, setStyle] = useState<PreviewStyle | null>(null);
+
+  useEffect(() => {
+    getPreviewStyle().then(setStyle).catch(console.error);
+  }, []);
+
+  if (!style) return null;
+
+  const handleChange = (next: PreviewStyle) => {
+    setStyle(next);
+    setPreviewStyle(next).catch(console.error);
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="text-xs font-semibold text-muted-foreground">Live preview</div>
+      <SegmentedControl value={style} options={PREVIEW_STYLES} onChange={handleChange} />
+      <p className="text-xs text-muted-foreground">
+        {PREVIEW_STYLES.find((option) => option.value === style)?.hint}
+      </p>
+    </div>
+  );
 }
 
 interface GeneralPageProps extends UseRecordingResult {
@@ -128,6 +170,8 @@ export function GeneralPage({
           </Button>
         </div>
       )}
+
+      {!serverOnly && <PreviewSetting />}
 
       {lastTranscription && (
         <div className="flex flex-col gap-1.5">

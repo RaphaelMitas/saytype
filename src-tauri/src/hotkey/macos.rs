@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use tauri::{Emitter, Manager};
 
+use crate::preview::{self, Outcome};
 use crate::{audio, config, text_insertion, transcriber, AppState};
 
 // Track whether the hotkey combo is currently activated
@@ -240,6 +241,7 @@ fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
         println!("[DEBUG] Recording started successfully");
         crate::tray::set_recording_state(&handle, true);
         let _ = handle.emit("recording-started", ());
+        preview::start(&handle);
     });
 }
 
@@ -256,6 +258,8 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
             audio::play_stop_sound();
         }
 
+        let preview_session = preview::stop(&handle);
+
         println!("[DEBUG] Stopping recording...");
         let audio_path = match audio::stop_recording() {
             Ok(path) => {
@@ -265,6 +269,7 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
             Err(e) => {
                 eprintln!("[DEBUG] Failed to stop recording: {}", e);
                 crate::tray::set_recording_state(&handle, false);
+                preview::finish(&handle, preview_session, Outcome::Empty);
                 return;
             }
         };
@@ -284,13 +289,16 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
                             eprintln!("[DEBUG] Failed to insert text: {}", e);
                         }
                     });
+                    preview::finish(&handle, preview_session, Outcome::Pasted(text.clone()));
                     let _ = handle.emit("transcription-complete", text);
                 } else {
                     println!("[DEBUG] Transcription was empty");
+                    preview::finish(&handle, preview_session, Outcome::Empty);
                 }
             }
             Err(e) => {
                 eprintln!("[DEBUG] Transcription failed: {}", e);
+                preview::finish(&handle, preview_session, Outcome::Failed(e.clone()));
                 let _ = handle.emit("transcription-error", e);
             }
         }

@@ -303,6 +303,38 @@ pub fn stop_recording() -> Result<String, String> {
     recorder.stop()
 }
 
+/// Shares the buffer of a running recording so readers don't hold the recorder lock.
+fn live_samples() -> Option<(Arc<StdMutex<Vec<f32>>>, u32)> {
+    let recorder = PTT_RECORDER.lock().ok()?;
+    recorder.stream.as_ref()?;
+    Some((Arc::clone(&recorder.samples), recorder.sample_rate))
+}
+
+/// Writes what has been recorded so far to a 16kHz WAV, leaving the recording running.
+pub fn save_snapshot(path: &str) -> Result<(), String> {
+    let (samples, sample_rate) = live_samples().ok_or("No recording in progress")?;
+    let samples = samples.lock().map_err(|e| e.to_string())?.clone();
+    if samples.is_empty() {
+        return Err("No audio samples recorded".to_string());
+    }
+    let resampled = resample_audio(&samples, sample_rate, TARGET_SAMPLE_RATE)?;
+    write_wav_file(path, &resampled, TARGET_SAMPLE_RATE)
+}
+
+/// Loudness of the last 50ms on a 0..1 scale spanning -60dB to 0dB.
+pub fn recording_level() -> Option<f32> {
+    let (samples, sample_rate) = live_samples()?;
+    let samples = samples.lock().ok()?;
+    let window = (sample_rate as usize / 20).min(samples.len());
+    if window == 0 {
+        return Some(0.0);
+    }
+    let tail = &samples[samples.len() - window..];
+    let rms = (tail.iter().map(|s| s * s).sum::<f32>() / window as f32).sqrt();
+    let db = 20.0 * rms.max(1e-6).log10();
+    Some(((db + 60.0) / 60.0).clamp(0.0, 1.0))
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]

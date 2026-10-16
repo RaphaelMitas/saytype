@@ -4,6 +4,7 @@ mod audio;
 mod config;
 mod e2e;
 mod hotkey;
+mod preview;
 mod remote;
 mod sidecar;
 mod text_insertion;
@@ -292,6 +293,18 @@ async fn set_network_config(
 }
 
 #[tauri::command]
+async fn get_preview_style() -> config::PreviewStyle {
+    config::load_config().preview
+}
+
+#[tauri::command]
+async fn set_preview_style(style: config::PreviewStyle) -> Result<(), String> {
+    let mut config = config::load_config();
+    config.preview = style;
+    config::save_config(&config)
+}
+
+#[tauri::command]
 async fn test_remote_connection(server_url: String) -> Result<bool, String> {
     remote::check_health(&server_url).await
 }
@@ -343,6 +356,10 @@ pub fn run() {
             }
 
             if !is_server_only && !is_e2e {
+                if let Err(e) = preview::create_window(&app_handle) {
+                    eprintln!("[PREVIEW] Failed to create overlay window: {}", e);
+                }
+
                 // Check accessibility permission before starting hotkey listener (macOS only)
                 #[cfg(target_os = "macos")]
                 if !text_insertion::check_accessibility_permission() {
@@ -411,6 +428,8 @@ pub fn run() {
             get_network_config,
             set_network_config,
             test_remote_connection,
+            get_preview_style,
+            set_preview_style,
             restart_app,
             get_local_ip,
             get_platform,
