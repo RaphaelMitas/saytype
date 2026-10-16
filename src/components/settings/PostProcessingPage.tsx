@@ -1,6 +1,6 @@
 import { cn } from "cn";
 import { ChevronDown, ChevronUp, Plus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
 import { TranscriptBox } from "@/components/settings/TranscriptBox";
 import { Badge } from "@/components/ui/badge";
@@ -109,7 +109,14 @@ export function PostProcessingPage() {
   const [error, setError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
 
-  const refresh = useCallback(() => getPostProcessing().then(setState).catch(console.error), []);
+  // Refreshes can resolve out of order, and only the latest one reflects the config
+  const latest = useRef(0);
+  const refresh = useCallback(() => {
+    const request = ++latest.current;
+    return getPostProcessing()
+      .then((next) => request === latest.current && setState(next))
+      .catch(console.error);
+  }, []);
 
   useRefreshOnFocus(refresh);
 

@@ -33,10 +33,12 @@ build still works and post-processing reports itself unsupported; CI sets
 │                        Recording Flow                            │
 ├─────────────────────────────────────────────────────────────────┤
 │ Hotkey (Right Cmd)  →  CPAL recording  →  Sidecar (Parakeet)    │
-│      hotkey.rs           audio.rs          sidecar.rs           │
-│                                                 ↓                │
-│ Frontend event  ←  Tauri emit  ←  Clipboard paste               │
-│   useRecording.ts     lib.rs      text_insertion/               │
+│      hotkey/              audio.rs          transcriber.rs      │
+│                                                 ↓               │
+│ Clipboard paste  ←  Tauri emit  ←  Post-processing (optional)   │
+│  text_insertion/    hotkey/recording.rs  post_processing.rs     │
+│                          ↓                                      │
+│                   Frontend event (useRecording.ts)              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
