@@ -257,26 +257,22 @@ async fn rewrite(model: Model, prompt: &str, text: &str) -> Result<String, Strin
     Ok(rewritten.to_string())
 }
 
-pub async fn apply(text: String) -> String {
+/// The text to paste, unchanged when post-processing is off. An error means paste the raw text.
+pub async fn apply(text: &str) -> Result<String, String> {
     let settings = config::load_config().post_processing;
     if !settings.enabled {
-        return text;
+        return Ok(text.to_string());
     }
     let started = Instant::now();
-    match rewrite(settings.model, &settings.selected().text, &text).await {
-        Ok(rewritten) => {
-            println!(
-                "[POST] Rewrote in {} ms: '{}'",
-                started.elapsed().as_millis(),
-                rewritten
-            );
-            rewritten
-        }
-        Err(e) => {
-            eprintln!("[POST] Pasting raw transcript: {}", e);
-            text
-        }
-    }
+    let rewritten = rewrite(settings.model, &settings.selected().text, text)
+        .await
+        .inspect_err(|e| eprintln!("[POST] Pasting raw transcript: {}", e))?;
+    println!(
+        "[POST] Rewrote in {} ms: '{}'",
+        started.elapsed().as_millis(),
+        rewritten
+    );
+    Ok(rewritten)
 }
 
 #[derive(Serialize)]

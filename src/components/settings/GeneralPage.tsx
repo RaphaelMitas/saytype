@@ -178,6 +178,11 @@ export function GeneralPage({
       {lastTranscription && lastTranscription.raw !== lastTranscription.text && (
         <TranscriptBox label="Before post-processing" text={lastTranscription.raw} />
       )}
+      {lastTranscription?.error && (
+        <p className="text-xs text-muted-foreground">
+          Post-processing failed, so the raw transcript was pasted: {lastTranscription.error}
+        </p>
+      )}
     </>
   );
 }

@@ -7,6 +7,7 @@ export type RecordingState = "initializing" | "idle" | "recording" | "processing
 export interface Transcription {
   text: string;
   raw: string;
+  error: string | null;
 }
 
 export interface UseRecordingResult {

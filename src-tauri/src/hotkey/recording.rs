@@ -101,13 +101,16 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
                 println!("[DEBUG] Transcription result: '{}'", text);
                 if !text.is_empty() {
                     let _in_order = IN_ORDER.lock().await;
-                    let raw = text.clone();
-                    let text = post_processing::apply(text).await;
+                    let raw = text;
+                    let (text, error) = match post_processing::apply(&raw).await {
+                        Ok(text) => (text, None),
+                        Err(e) => (raw.clone(), Some(e)),
+                    };
                     // Before the paste starts, so a fast failure always lands after it
                     preview::finish(&handle, preview_session, Outcome::Pasted(text.clone()));
                     let _ = handle.emit(
                         "transcription-complete",
-                        serde_json::json!({ "text": text, "raw": raw }),
+                        serde_json::json!({ "text": text, "raw": raw, "error": error }),
                     );
                     let paste_handle = handle.clone();
                     let pasted = tauri::async_runtime::spawn_blocking(move || {
