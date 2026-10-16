@@ -28,10 +28,16 @@ jobs:
         run: pnpm tsc --noEmit
 
       - name: Check (format + lint, Biome)
-        run: pnpm biome check src/
+        run: pnpm biome check
 
       - name: Build check (Vite)
         run: pnpm build
+
+      # Catches a broken capture on the PR instead of at release time
+      - name: Screenshot capture
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm screenshots "$RUNNER_TEMP/screenshots"
 
   rust:
     name: Rust (macOS)

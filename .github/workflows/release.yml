@@ -164,6 +164,7 @@ jobs:
     runs-on: macos-15
     # A failed capture shouldn't hold back signed builds and the Homebrew tap
     continue-on-error: true
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -207,6 +208,16 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: artifacts
+
+      # The README links releases/latest, so a release without screenshots would break it
+      - name: Reuse previous screenshots if capture failed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ ! -d artifacts/screenshots ]; then
+            gh release download -R "$GITHUB_REPOSITORY" -p 'screenshot-*.png' -D artifacts/screenshots \
+              || echo "::warning::No new screenshots and none in the previous release"
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3

@@ -14,7 +14,7 @@ const SCHEMES = ["dark", "light"] as const;
 
 await mkdir(outDir, { recursive: true });
 
-const server = await createServer({ server: { port: 1430, strictPort: false } });
+const server = await createServer({ server: { strictPort: false } });
 await server.listen();
 const browser = await chromium.launch();
 
