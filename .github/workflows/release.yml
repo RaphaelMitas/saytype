@@ -34,6 +34,8 @@ jobs:
 
       - name: Build macOS app
         uses: ./.github/actions/build-macos
+        env:
+          SAYTYPE_UPDATER: "1"
         with:
           tag: ${{ steps.tag.outputs.TAG }}
 
@@ -99,11 +101,25 @@ jobs:
           cd src-tauri/target/release/bundle/macos
           zip -r Saytype-${{ steps.version.outputs.VERSION }}.zip Saytype.app
 
+      # Not Tauri's createUpdaterArtifacts: that archives the app before the signing steps above
+      - name: Create updater archive
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          BUNDLE_DIR=src-tauri/target/release/bundle/macos
+          tar --no-mac-metadata -czf "$BUNDLE_DIR/Saytype.app.tar.gz" -C "$BUNDLE_DIR" Saytype.app
+          pnpm tauri signer sign --app-version "$VERSION" "$BUNDLE_DIR/Saytype.app.tar.gz"
+
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v7
         with:
           name: macos-release
-          path: src-tauri/target/release/bundle/macos/Saytype-${{ steps.version.outputs.VERSION }}.zip
+          path: |
+            src-tauri/target/release/bundle/macos/Saytype-${{ steps.version.outputs.VERSION }}.zip
+            src-tauri/target/release/bundle/macos/Saytype.app.tar.gz
+            src-tauri/target/release/bundle/macos/Saytype.app.tar.gz.sig
 
   build-windows:
     runs-on: windows-latest
@@ -219,11 +235,25 @@ jobs:
               || echo "::warning::No new screenshots and none in the previous release"
           fi
 
+      # The app polls releases/latest/download/latest.json for updates
+      - name: Write update manifest
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          jq -n \
+            --arg version "${TAG#v}" \
+            --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg url "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/Saytype.app.tar.gz" \
+            --arg signature "$(cat artifacts/macos-release/Saytype.app.tar.gz.sig)" \
+            '{version: $version, pub_date: $pub_date, platforms: {"darwin-aarch64": {url: $url, signature: $signature}}}' \
+            > artifacts/latest.json
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           files: |
+            artifacts/latest.json
             artifacts/macos-release/*
             artifacts/windows-release-msi/*
             artifacts/windows-release-nsis/*

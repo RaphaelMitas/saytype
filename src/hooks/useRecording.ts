@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
+import { useTauriEvent } from "@/hooks/useTauriEvent";
 
 export type RecordingState = "initializing" | "idle" | "recording" | "processing";
 
@@ -16,51 +16,29 @@ export function useRecording(): UseRecordingResult {
   const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if sidecar already ready
     invoke<boolean>("get_sidecar_ready").then((ready) => {
       if (ready) setState("idle");
     });
-
-    // Listen for sidecar ready
-    const unlistenSidecarReady = listen("sidecar-ready", () => {
-      setState("idle");
-    });
-
-    // Listen for recording events from Rust backend
-    const unlistenRecordingStarted = listen("recording-started", () => {
-      setState("recording");
-      setLastError(null);
-    });
-
-    const unlistenTranscriptionStarted = listen("transcription-started", () => {
-      setState("processing");
-    });
-
-    const unlistenTranscriptionComplete = listen<string>("transcription-complete", (event) => {
-      setState("idle");
-      setLastTranscription(event.payload);
-    });
-
-    const unlistenTranscriptionError = listen<string>("transcription-error", (event) => {
-      setState("idle");
-      setLastError(event.payload);
-    });
-
-    const unlistenSidecarError = listen<string>("sidecar-error", (event) => {
-      setState("idle");
-      setLastError(event.payload);
-    });
-
-    // Cleanup listeners on unmount
-    return () => {
-      unlistenSidecarReady.then((fn) => fn());
-      unlistenRecordingStarted.then((fn) => fn());
-      unlistenTranscriptionStarted.then((fn) => fn());
-      unlistenTranscriptionComplete.then((fn) => fn());
-      unlistenTranscriptionError.then((fn) => fn());
-      unlistenSidecarError.then((fn) => fn());
-    };
   }, []);
+
+  useTauriEvent("sidecar-ready", () => setState("idle"));
+  useTauriEvent("recording-started", () => {
+    setState("recording");
+    setLastError(null);
+  });
+  useTauriEvent("transcription-started", () => setState("processing"));
+  useTauriEvent<string>("transcription-complete", (text) => {
+    setState("idle");
+    setLastTranscription(text);
+  });
+  useTauriEvent<string>("transcription-error", (error) => {
+    setState("idle");
+    setLastError(error);
+  });
+  useTauriEvent<string>("sidecar-error", (error) => {
+    setState("idle");
+    setLastError(error);
+  });
 
   return {
     state,

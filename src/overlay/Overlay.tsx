@@ -1,8 +1,8 @@
-import { listen } from "@tauri-apps/api/event";
 import { cn } from "cn";
 import { CircleAlert, CircleCheck, LoaderCircle } from "lucide-react";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import { Kbd } from "@/components/ui/kbd";
+import { useTauriEvent } from "@/hooks/useTauriEvent";
 import type { PreviewStyle } from "@/lib/preview";
 
 type OverlayEvent =
@@ -273,17 +273,11 @@ export function Overlay() {
   const [view, dispatch] = useReducer(reduce, INITIAL);
   const [level, setLevel] = useState(0);
 
-  useEffect(() => {
-    const unlistenOverlay = listen<OverlayEvent>("overlay", (event) => {
-      if (event.payload.phase === "listening") setLevel(0);
-      dispatch(event.payload);
-    });
-    const unlistenLevel = listen<number>("overlay-level", (event) => setLevel(event.payload));
-    return () => {
-      unlistenOverlay.then((fn) => fn());
-      unlistenLevel.then((fn) => fn());
-    };
-  }, []);
+  useTauriEvent<OverlayEvent>("overlay", (event) => {
+    if (event.phase === "listening") setLevel(0);
+    dispatch(event);
+  });
+  useTauriEvent<number>("overlay-level", setLevel);
 
   return (
     <div

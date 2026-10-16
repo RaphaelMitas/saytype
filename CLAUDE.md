@@ -63,6 +63,7 @@ No external dependencies required - uses native CPAL for audio recording.
 | `sidecar.rs` | Sidecar spawn, JSON IPC, cross-platform binary lookup |
 | `text_insertion/` | Clipboard save/restore and ⌘V per platform, permission checks |
 | `tray.rs` | Menu bar icon, recording state indicator |
+| `updater.rs` | Background update check/download from GitHub releases, install on restart or quit |
 
 ### State Management
 

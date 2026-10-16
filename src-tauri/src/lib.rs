@@ -10,9 +10,10 @@ mod sidecar;
 mod text_insertion;
 mod transcriber;
 mod tray;
+mod updater;
 
 use std::sync::Arc;
-use tauri::{Emitter, WindowEvent};
+use tauri::{Emitter, RunEvent, WindowEvent};
 use tokio::sync::Mutex;
 
 pub use config::HotkeyConfig;
@@ -94,33 +95,61 @@ async fn quit_app(app_handle: tauri::AppHandle) {
 
 /// Restarts the app. Returns true if restarting, false if in dev mode (manual restart needed).
 #[tauri::command]
-async fn restart_app() -> Result<bool, String> {
+async fn restart_app(app_handle: tauri::AppHandle) -> Result<bool, String> {
     if cfg!(debug_assertions) {
         // Dev mode: can't restart because the Tauri CLI owns the process lifecycle
         return Ok(false);
     }
-    #[allow(unused_variables)]
+    app_handle
+        .run_on_main_thread(|| {
+            let _ = updater::install_pending();
+            relaunch()
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+pub(crate) fn app_bundle() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    exe.ancestors()
+        .find(|path| path.extension().is_some_and(|ext| ext == "app"))
+        .map(std::path::Path::to_path_buf)
+}
+
+pub(crate) fn relaunch() -> ! {
+    #[cfg(target_os = "macos")]
+    if let Some(bundle) = app_bundle() {
+        let _ = std::process::Command::new("sh")
+            .args(["-c", "sleep 0.5 && open -n \"$1\"", "sh"])
+            .arg(bundle)
+            .spawn();
+    }
+    #[cfg(target_os = "windows")]
     if let Ok(exe) = std::env::current_exe() {
-        #[cfg(target_os = "macos")]
-        {
-            let exe_str = exe.to_string_lossy().to_string();
-            if let Some(app_end) = exe_str.find(".app/") {
-                let app_path = &exe_str[..app_end + 4];
-                let _ = std::process::Command::new("sh")
-                    .arg("-c")
-                    .arg(format!("sleep 0.5 && open -n '{}'", app_path))
-                    .spawn();
-            }
-        }
-        #[cfg(target_os = "windows")]
-        {
-            let exe_str = exe.to_string_lossy().to_string();
-            let _ = std::process::Command::new("cmd")
-                .args(["/C", &format!("timeout /t 1 >nul && \"{}\"", exe_str)])
-                .spawn();
-        }
+        let exe_str = exe.to_string_lossy().to_string();
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", &format!("timeout /t 1 >nul && \"{}\"", exe_str)])
+            .spawn();
     }
     std::process::exit(0);
+}
+
+#[tauri::command]
+fn get_update_status() -> updater::UpdateStatus {
+    updater::status()
+}
+
+#[tauri::command]
+async fn check_for_updates(app_handle: tauri::AppHandle) {
+    updater::check_and_download(&app_handle).await;
+}
+
+#[tauri::command]
+fn install_update(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let handle = app_handle.clone();
+    app_handle
+        .run_on_main_thread(move || updater::install_and_restart(&handle))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -328,6 +357,7 @@ pub fn run() {
     let app_state = AppState::new(app_config.hotkey);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
         .setup(|app| {
             // A regular app's windows can't join another app's fullscreen Space, which hides the preview
@@ -391,6 +421,8 @@ pub fn run() {
                 println!("[SETUP] Server-only mode — skipping hotkey and permissions setup");
             }
 
+            updater::start(&app_handle);
+
             // Initialize transcription backend (local sidecar, remote server, or HTTP server)
             let handle_clone = app_handle.clone();
             let e2e_audio = e2e::audio_path();
@@ -438,7 +470,15 @@ pub fn run() {
             restart_app,
             get_local_ip,
             get_platform,
+            get_update_status,
+            check_for_updates,
+            install_update,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_, event| {
+            if let RunEvent::Exit = event {
+                let _ = updater::install_pending();
+            }
+        });
 }
