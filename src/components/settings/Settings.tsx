@@ -1,12 +1,24 @@
 import { cn } from "cn";
-import { Globe, House, Info, Keyboard, type LucideIcon, RefreshCw, Shield } from "lucide-react";
+import {
+  BookA,
+  ClockFading,
+  Globe,
+  House,
+  Info,
+  Keyboard,
+  type LucideIcon,
+  RefreshCw,
+  Shield,
+} from "lucide-react";
 import { useState } from "react";
 import { PermissionList } from "@/components/PermissionList";
 import { AboutPage } from "@/components/settings/AboutPage";
 import { GeneralPage } from "@/components/settings/GeneralPage";
+import { HistoryPage } from "@/components/settings/HistoryPage";
 import { HotkeyPage } from "@/components/settings/HotkeyPage";
 import { ModePage } from "@/components/settings/ModePage";
 import { PageHeader } from "@/components/settings/PageHeader";
+import { WordsPage } from "@/components/settings/WordsPage";
 import { Button } from "@/components/ui/button";
 import { missingPermissions, type Platform, usePermissions } from "@/hooks/usePermissions";
 import { useRecording } from "@/hooks/useRecording";
@@ -15,7 +27,7 @@ import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { installUpdate, useUpdateStatus } from "@/hooks/useUpdateStatus";
 import type { NetworkConfig } from "@/lib/network";
 
-type Page = "general" | "hotkey" | "mode" | "permissions" | "about";
+type Page = "general" | "hotkey" | "words" | "history" | "mode" | "permissions" | "about";
 
 interface NavItem {
   page: Page;
@@ -27,6 +39,8 @@ interface NavItem {
 const NAV: NavItem[] = [
   { page: "general", label: "General", icon: House },
   { page: "hotkey", label: "Hotkey", icon: Keyboard, hiddenInServerMode: true },
+  { page: "words", label: "Words", icon: BookA },
+  { page: "history", label: "History", icon: ClockFading, hiddenInServerMode: true },
   { page: "mode", label: "Mode", icon: Globe },
   { page: "permissions", label: "Permissions", icon: Shield, hiddenInServerMode: true },
 ];
@@ -95,6 +109,8 @@ export function Settings({ platform, runningNetwork, hotkey, onHotkeyChange }: S
         {page === "hotkey" && (
           <HotkeyPage platform={platform} hotkey={hotkey} onChange={onHotkeyChange} />
         )}
+        {page === "words" && <WordsPage mode={runningNetwork.mode} />}
+        {page === "history" && <HistoryPage mode={runningNetwork.mode} />}
         {page === "mode" && (
           <ModePage
             platform={platform}
