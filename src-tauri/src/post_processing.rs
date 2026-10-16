@@ -300,29 +300,23 @@ pub async fn get_post_processing() -> State {
     }
 }
 
-fn update(change: impl FnOnce(&mut Settings)) -> Result<(), String> {
-    let mut config = config::load_config();
-    change(&mut config.post_processing);
-    config::save_config(&config)
-}
-
 #[tauri::command]
 pub async fn set_post_processing_enabled(enabled: bool) -> Result<(), String> {
-    update(|settings| settings.enabled = enabled)
+    config::update(|config| config.post_processing.enabled = enabled)
 }
 
 #[tauri::command]
 pub async fn select_post_processing_prompt(id: String) -> Result<(), String> {
-    update(|settings| settings.prompt_id = id)
+    config::update(|config| config.post_processing.prompt_id = id)
 }
 
-/// `None` creates a custom prompt. A built-in keeps its name, only its text is saved as an edit.
+/// `None` creates and selects a custom prompt. A built-in keeps its name, only its text is saved as an edit.
 #[tauri::command]
 pub async fn save_post_processing_prompt(
     id: Option<String>,
     name: String,
     text: String,
-) -> Result<String, String> {
+) -> Result<(), String> {
     let id = id.unwrap_or_else(|| {
         let millis = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -330,7 +324,8 @@ pub async fn save_post_processing_prompt(
             .as_millis();
         format!("custom_{millis}")
     });
-    update(|settings| {
+    config::update(|config| {
+        let settings = &mut config.post_processing;
         if let Some(builtin) = BUILTINS.iter().find(|builtin| builtin.id == id) {
             if text == builtin.text {
                 settings.edited_builtins.remove(&id);
@@ -341,29 +336,21 @@ pub async fn save_post_processing_prompt(
             prompt.name = name;
             prompt.text = text;
         } else {
-            settings.custom_prompts.push(CustomPrompt {
-                id: id.clone(),
-                name,
-                text,
-            });
+            settings.prompt_id = id.clone();
+            settings
+                .custom_prompts
+                .push(CustomPrompt { id, name, text });
         }
-    })?;
-    Ok(id)
+    })
 }
 
 /// Deletes a custom prompt, or drops the edits to a built-in one.
 #[tauri::command]
 pub async fn reset_post_processing_prompt(id: String) -> Result<(), String> {
-    update(|settings| {
+    config::update(|config| {
+        let settings = &mut config.post_processing;
         settings.edited_builtins.remove(&id);
         settings.custom_prompts.retain(|prompt| prompt.id != id);
-        if !settings
-            .prompts()
-            .iter()
-            .any(|prompt| prompt.id == settings.prompt_id)
-        {
-            settings.prompt_id = BUILTINS[0].id.to_string();
-        }
     })
 }
 

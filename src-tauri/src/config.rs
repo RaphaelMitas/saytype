@@ -198,6 +198,12 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
     Ok(())
 }
 
+pub fn update(change: impl FnOnce(&mut AppConfig)) -> Result<(), String> {
+    let mut config = load_config();
+    change(&mut config);
+    save_config(&config)
+}
+
 /// Map JavaScript event.code to platform keycode
 #[cfg(not(target_os = "windows"))]
 pub fn js_code_to_keycode(code: &str) -> Option<i64> {

@@ -5,6 +5,8 @@ use crate::preview::{self, Outcome};
 use crate::{audio, post_processing, text_insertion, transcriber, AppState};
 
 static HOTKEY_ACTIVE: AtomicBool = AtomicBool::new(false);
+// Rewrites take different times, so without this a short dictation can paste before a long one
+static IN_ORDER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 pub(super) fn set_hotkey_held(app_handle: &tauri::AppHandle, held: bool) {
     if HOTKEY_ACTIVE.swap(held, Ordering::SeqCst) != held {
@@ -78,6 +80,7 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
         println!("[DEBUG] Stopping recording...");
         let audio_path = audio::stop_recording();
         drop(is_recording);
+        let _in_order = IN_ORDER.lock().await;
         crate::tray::set_recording_state(&handle, false);
         let audio_path = match audio_path {
             Ok(path) => {

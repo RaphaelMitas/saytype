@@ -43,8 +43,8 @@ export async function selectPrompt(id: string): Promise<void> {
   await invoke("select_post_processing_prompt", { id });
 }
 
-export async function savePrompt(id: string | null, name: string, text: string): Promise<string> {
-  return await invoke("save_post_processing_prompt", { id, name, text });
+export async function savePrompt(id: string | null, name: string, text: string): Promise<void> {
+  await invoke("save_post_processing_prompt", { id, name, text });
 }
 
 export async function resetPrompt(id: string): Promise<void> {

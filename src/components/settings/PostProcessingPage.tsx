@@ -1,12 +1,13 @@
 import { cn } from "cn";
 import { ChevronDown, ChevronUp, Plus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import {
   type Availability,
   getPostProcessing,
@@ -46,9 +47,12 @@ interface Draft {
 }
 
 function collapsedPrompts(prompts: Prompt[], selectedId: string): Prompt[] {
-  const pinned = prompts.filter((prompt) => prompt.id === selectedId || !prompt.builtin);
-  const fill = prompts.filter((prompt) => !pinned.includes(prompt));
-  const shown = new Set([...pinned, ...fill.slice(0, Math.max(0, COLLAPSED_ROWS - pinned.length))]);
+  const byPriority = [...prompts].sort(
+    (a, b) =>
+      Number(b.id === selectedId) - Number(a.id === selectedId) ||
+      Number(a.builtin) - Number(b.builtin),
+  );
+  const shown = new Set(byPriority.slice(0, COLLAPSED_ROWS));
   return prompts.filter((prompt) => shown.has(prompt));
 }
 
@@ -106,9 +110,7 @@ export function PostProcessingPage() {
 
   const refresh = useCallback(() => getPostProcessing().then(setState).catch(console.error), []);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useRefreshOnFocus(refresh);
 
   if (!state) return null;
 
@@ -123,8 +125,7 @@ export function PostProcessingPage() {
 
   const handleSave = async () => {
     if (!draft) return;
-    const id = await savePrompt(draft.id, draft.name.trim(), draft.text.trim());
-    if (draft.id === null) await selectPrompt(id);
+    await savePrompt(draft.id, draft.name.trim(), draft.text.trim());
     setDraft(null);
   };
 
@@ -224,7 +225,7 @@ export function PostProcessingPage() {
                       {prompt.builtin ? "Reset" : "Delete"}
                     </Button>
                   )}
-                  {isSelected && !isEditing && (
+                  {isSelected && !draft && (
                     <Button
                       variant="ghost"
                       size="xs"
@@ -273,7 +274,7 @@ export function PostProcessingPage() {
               </Button>
             )}
             <div className="flex-1" />
-            {draft?.id !== null && (
+            {!draft && (
               <Button
                 variant="ghost"
                 size="xs"
