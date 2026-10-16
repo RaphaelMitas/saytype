@@ -2,6 +2,7 @@ import { cn } from "cn";
 import { Mic } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
+import { RowText } from "@/components/settings/RowText";
 import { Section } from "@/components/settings/Section";
 import { TranscriptBox } from "@/components/settings/TranscriptBox";
 import { Button } from "@/components/ui/button";
@@ -122,10 +123,7 @@ export function GeneralPage({
       <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-3">
           <span className={cn("size-2 shrink-0 rounded-full", status.dot)} />
-          <div className="flex-1">
-            <div className="text-sm font-semibold">{status.label}</div>
-            <div className="text-xs text-muted-foreground">{detail}</div>
-          </div>
+          <RowText title={status.label} description={detail} />
           {!serverOnly && (
             <>
               <Button
@@ -155,15 +153,10 @@ export function GeneralPage({
 
       {missingPermissions.length > 0 && (
         <div className="flex items-center gap-3 rounded-xl border border-destructive/40 bg-card p-4">
-          <div className="flex-1">
-            <div className="text-sm font-semibold">
-              {joinNames(missingPermissions)} {missingPermissions.length > 1 ? "are" : "is"} off
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Saytype can't record or paste until{" "}
-              {missingPermissions.length > 1 ? "they're" : "it's"} on.
-            </div>
-          </div>
+          <RowText
+            title={`${joinNames(missingPermissions)} ${missingPermissions.length > 1 ? "are" : "is"} off`}
+            description={`Saytype can't record or paste until ${missingPermissions.length > 1 ? "they're" : "it's"} on.`}
+          />
           <Button size="sm" onClick={onFixPermissions}>
             Fix
           </Button>

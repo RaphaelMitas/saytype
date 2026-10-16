@@ -47,7 +47,6 @@ fn build_foundation_models_bridge() {
     let swiftc = xcrun(&["--find", "swiftc"]).expect("swiftc not found");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let object = out_dir.join("foundation_models.o");
     let library = out_dir.join("libfoundation_models.a");
     let deployment_target = env::var("MACOSX_DEPLOYMENT_TARGET").unwrap_or("11.0".into());
 
@@ -55,19 +54,11 @@ fn build_foundation_models_bridge() {
         // Without it a single file compiles in script mode and emits a competing _main
         .arg("-parse-as-library")
         .args(["-target", &format!("arm64-apple-macosx{deployment_target}")])
-        .args(["-sdk", &sdk, "-O", "-c", SOURCE, "-o"])
-        .arg(&object)
+        .args(["-sdk", &sdk, "-O", "-emit-library", "-static", SOURCE, "-o"])
+        .arg(&library)
         .status()
         .expect("failed to run swiftc");
     assert!(status.success(), "swiftc failed on {SOURCE}");
-
-    let status = Command::new("libtool")
-        .args(["-static", "-o"])
-        .arg(&library)
-        .arg(&object)
-        .status()
-        .expect("failed to run libtool");
-    assert!(status.success(), "libtool failed on {SOURCE}");
 
     let toolchain_swift = Path::new(&swiftc)
         .parent()

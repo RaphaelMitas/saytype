@@ -2,6 +2,7 @@ import { cn } from "cn";
 import { ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
+import { RowText } from "@/components/settings/RowText";
 import { Section } from "@/components/settings/Section";
 import { TranscriptBox } from "@/components/settings/TranscriptBox";
 import { Badge } from "@/components/ui/badge";
@@ -167,13 +168,10 @@ export function PostProcessingPage() {
 
       <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-3">
-          <div className="flex-1">
-            <div className="text-sm font-semibold">Post-process transcripts</div>
-            <div className="text-xs text-muted-foreground">
-              Raw text is pasted if the model fails or takes longer than {state.timeout_secs}
-              &nbsp;s.
-            </div>
-          </div>
+          <RowText
+            title="Post-process transcripts"
+            description={`Raw text is pasted if the model fails or takes longer than ${state.timeout_secs}\u00a0s.`}
+          />
           <Switch
             checked={state.enabled}
             disabled={!usable && !state.enabled}
