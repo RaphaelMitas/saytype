@@ -219,7 +219,8 @@ function Panel({ view, level }: { view: View; level: number }) {
 
 function Compact({ view, level }: { view: View; level: number }) {
   const recording = isRecording(view.phase);
-  const { outer, inner, overflowing } = useOverflow(view.settled + view.unsettled);
+  // The meter gives way to a narrower spinner on release, so the text gets room
+  const { outer, inner, overflowing } = useOverflow(`${recording}${view.settled}${view.unsettled}`);
 
   const label =
     view.phase === "pasted"
