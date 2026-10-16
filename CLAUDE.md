@@ -97,6 +97,7 @@ Sidecar binary naming follows Tauri convention: `transcribe-server-{arch}-apple-
 pnpm test           # Rust unit tests
 pnpm e2e:sidecar    # Sidecar E2E — needs sidecar/build.sh to have run
 pnpm e2e:app        # Bundled app E2E — needs pnpm tauri build to have run
+pnpm screenshots <dir>  # Settings screenshots against a mocked backend, as attached to each release
 ```
 
 Both E2E suites transcribe `tests/fixtures/hello.wav` (generated with macOS

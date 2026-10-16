@@ -24,14 +24,16 @@ try {
   for (const colorScheme of SCHEMES) {
     const page = await browser.newPage({ colorScheme, deviceScaleFactor: 2 });
     await page.goto(url.href);
+    await page.getByText("Ready", { exact: true }).waitFor();
 
     for (const name of PAGES) {
       await page.getByRole("button", { name, exact: true }).click();
       await page.getByRole("heading", { name, exact: true }).waitFor();
-      await page.mouse.move(0, 0);
 
       const file = path.join(outDir, `screenshot-${name.toLowerCase()}-${colorScheme}.png`);
-      await page.locator("#shot").screenshot({ path: file, omitBackground: true });
+      await page
+        .locator("#shot")
+        .screenshot({ path: file, omitBackground: true, animations: "disabled" });
       console.log(file);
     }
 

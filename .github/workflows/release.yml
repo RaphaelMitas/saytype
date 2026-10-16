@@ -162,6 +162,8 @@ jobs:
   # macOS so the UI renders in the system font, as it does in the app
   screenshots:
     runs-on: macos-15
+    # A failed capture shouldn't hold back signed builds and the Homebrew tap
+    continue-on-error: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
