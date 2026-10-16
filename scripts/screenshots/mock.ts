@@ -31,7 +31,7 @@ mockIPC(
           enabled: true,
           model: "apple_intelligence",
           availability: "available",
-          prompt_id: "clean_up",
+          selected: { id: "clean_up", name: "Clean up", text: "", builtin: true, edited: false },
           prompts: [
             { id: "clean_up", name: "Clean up", text: "", builtin: true, edited: false },
             { id: "polished", name: "Polished", text: "", builtin: true, edited: false },

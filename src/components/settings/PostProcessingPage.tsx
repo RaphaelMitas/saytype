@@ -10,10 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import {
   type Availability,
+  deletePrompt,
   getPostProcessing,
   type PostProcessing,
   type Prompt,
-  resetPrompt,
   savePrompt,
   selectPrompt,
   setPostProcessingEnabled,
@@ -116,8 +116,7 @@ export function PostProcessingPage() {
 
   const availability = AVAILABILITY[state.availability];
   const usable = state.availability === "available" || state.availability === "model_not_ready";
-  const selected =
-    state.prompts.find((prompt) => prompt.id === state.prompt_id) ?? state.prompts[0];
+  const selected = state.selected;
   const canTest = usable && sample.trim() !== "" && !testing;
   const visible = expanded ? state.prompts : collapsedPrompts(state.prompts, selected.id);
 
@@ -128,6 +127,17 @@ export function PostProcessingPage() {
     await savePrompt(draft.id, draft.name.trim(), draft.text.trim());
     setDraft(null);
   };
+
+  const editor = (builtin: boolean) =>
+    draft && (
+      <Editor
+        draft={draft}
+        builtin={builtin}
+        onChange={setDraft}
+        onCancel={() => setDraft(null)}
+        onDone={() => run(handleSave())}
+      />
+    );
 
   const handleTest = async () => {
     setTesting(true);
@@ -201,9 +211,8 @@ export function PostProcessingPage() {
                   <button
                     type="button"
                     className="flex flex-1 items-center gap-2.5 text-left text-sm"
-                    onClick={() =>
-                      !isSelected && run(selectPrompt(prompt.id).then(() => setDraft(null)))
-                    }
+                    disabled={!!draft}
+                    onClick={() => !isSelected && run(selectPrompt(prompt.id))}
                   >
                     <span
                       className={cn(
@@ -220,7 +229,7 @@ export function PostProcessingPage() {
                       variant="ghost"
                       size="xs"
                       className="text-muted-foreground"
-                      onClick={() => run(resetPrompt(prompt.id).then(() => setDraft(null)))}
+                      onClick={() => run(deletePrompt(prompt.id).then(() => setDraft(null)))}
                     >
                       {prompt.builtin ? "Reset" : "Delete"}
                     </Button>
@@ -238,29 +247,11 @@ export function PostProcessingPage() {
                     </Button>
                   )}
                 </div>
-                {isEditing && (
-                  <Editor
-                    draft={draft}
-                    builtin={prompt.builtin}
-                    onChange={setDraft}
-                    onCancel={() => setDraft(null)}
-                    onDone={() => run(handleSave())}
-                  />
-                )}
+                {isEditing && editor(prompt.builtin)}
               </div>
             );
           })}
-          {draft?.id === null && (
-            <div className="px-3 py-2">
-              <Editor
-                draft={draft}
-                builtin={false}
-                onChange={setDraft}
-                onCancel={() => setDraft(null)}
-                onDone={() => run(handleSave())}
-              />
-            </div>
-          )}
+          {draft?.id === null && <div className="px-3 py-2">{editor(false)}</div>}
           <div className="flex items-center px-3 py-1">
             {state.prompts.length > COLLAPSED_ROWS && (
               <Button

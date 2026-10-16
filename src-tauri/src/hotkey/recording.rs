@@ -80,7 +80,6 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
         println!("[DEBUG] Stopping recording...");
         let audio_path = audio::stop_recording();
         drop(is_recording);
-        let _in_order = IN_ORDER.lock().await;
         crate::tray::set_recording_state(&handle, false);
         let audio_path = match audio_path {
             Ok(path) => {
@@ -101,6 +100,7 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
             Ok(text) => {
                 println!("[DEBUG] Transcription result: '{}'", text);
                 if !text.is_empty() {
+                    let _in_order = IN_ORDER.lock().await;
                     let text = post_processing::apply(text).await;
                     // Before the paste starts, so a fast failure always lands after it
                     preview::finish(&handle, preview_session, Outcome::Pasted(text.clone()));

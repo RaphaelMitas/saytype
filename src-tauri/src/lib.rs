@@ -439,7 +439,7 @@ pub fn run() {
             post_processing::set_post_processing_enabled,
             post_processing::select_post_processing_prompt,
             post_processing::save_post_processing_prompt,
-            post_processing::reset_post_processing_prompt,
+            post_processing::delete_post_processing_prompt,
             post_processing::test_post_processing,
         ])
         .run(tauri::generate_context!())

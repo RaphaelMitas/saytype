@@ -192,7 +192,10 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
     let json = serde_json::to_string_pretty(config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-    fs::write(&path, json).map_err(|e| format!("Failed to write config: {}", e))?;
+    // Renamed into place, so a concurrent load never reads a half-written file
+    let temp = path.with_extension("json.tmp");
+    fs::write(&temp, json).map_err(|e| format!("Failed to write config: {}", e))?;
+    fs::rename(&temp, &path).map_err(|e| format!("Failed to write config: {}", e))?;
 
     println!("[CONFIG] Saved config to {:?}", path);
     Ok(())

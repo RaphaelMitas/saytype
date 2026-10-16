@@ -141,13 +141,12 @@ impl Settings {
         builtins.chain(custom).collect()
     }
 
-    fn selected_text(&self) -> String {
+    fn selected(&self) -> Prompt {
         let prompts = self.prompts();
         prompts
             .iter()
             .find(|prompt| prompt.id == self.prompt_id)
             .unwrap_or(&prompts[0])
-            .text
             .clone()
     }
 }
@@ -261,7 +260,7 @@ pub async fn apply(text: String) -> String {
         return text;
     }
     let started = Instant::now();
-    match rewrite(settings.model, &settings.selected_text(), &text).await {
+    match rewrite(settings.model, &settings.selected().text, &text).await {
         Ok(rewritten) => {
             println!(
                 "[POST] Rewrote in {} ms: '{}'",
@@ -282,7 +281,7 @@ pub struct State {
     enabled: bool,
     model: Model,
     availability: Availability,
-    prompt_id: String,
+    selected: Prompt,
     prompts: Vec<Prompt>,
     timeout_secs: u64,
 }
@@ -294,8 +293,8 @@ pub async fn get_post_processing() -> State {
         enabled: settings.enabled,
         model: settings.model,
         availability: availability(settings.model),
+        selected: settings.selected(),
         prompts: settings.prompts(),
-        prompt_id: settings.prompt_id,
         timeout_secs: TIMEOUT.as_secs(),
     }
 }
@@ -344,9 +343,8 @@ pub async fn save_post_processing_prompt(
     })
 }
 
-/// Deletes a custom prompt, or drops the edits to a built-in one.
 #[tauri::command]
-pub async fn reset_post_processing_prompt(id: String) -> Result<(), String> {
+pub async fn delete_post_processing_prompt(id: String) -> Result<(), String> {
     config::update(|config| {
         let settings = &mut config.post_processing;
         settings.edited_builtins.remove(&id);
@@ -381,7 +379,7 @@ mod tests {
             prompt_id: "custom_gone".to_string(),
             ..Settings::default()
         };
-        assert_eq!(settings.selected_text(), BUILTINS[0].text);
+        assert_eq!(settings.selected().text, BUILTINS[0].text);
     }
 
     #[test]
@@ -390,7 +388,7 @@ mod tests {
         settings
             .edited_builtins
             .insert("clean_up".to_string(), "Mine".to_string());
-        assert_eq!(settings.selected_text(), "Mine");
+        assert_eq!(settings.selected().text, "Mine");
         assert!(settings.prompts()[0].edited);
     }
 }
