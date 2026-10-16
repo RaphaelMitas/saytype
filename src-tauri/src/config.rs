@@ -123,6 +123,8 @@ pub struct AppConfig {
     pub server_port: Option<u16>,
     #[serde(default)]
     pub preview: PreviewStyle,
+    #[serde(default)]
+    pub post_processing: crate::post_processing::Settings,
 }
 
 fn default_server_port() -> Option<u16> {

@@ -21,6 +21,11 @@ cd sidecar && ./build.sh
 
 No external dependencies required - uses native CPAL for audio recording.
 
+Post-processing calls Apple's Foundation Models through `src-tauri/swift/foundation_models.swift`,
+which `build.rs` compiles when the SDK has FoundationModels (Xcode 26 or later). Without it the
+build still works and post-processing reports itself unsupported; CI sets
+`SAYTYPE_REQUIRE_FOUNDATION_MODELS=1` so a release can't ship that way.
+
 ## Architecture
 
 ```
@@ -62,6 +67,7 @@ No external dependencies required - uses native CPAL for audio recording.
 | `audio.rs` | CPAL audio capture, sample rate conversion |
 | `sidecar.rs` | Sidecar spawn, JSON IPC, cross-platform binary lookup |
 | `text_insertion/` | Clipboard save/restore and ⌘V per platform, permission checks |
+| `post_processing.rs` | Optional transcript rewrite before paste, prompts, falls back to raw text |
 | `tray.rs` | Menu bar icon, recording state indicator |
 
 ### State Management
@@ -117,3 +123,5 @@ client vs server, `SAYTYPE_E2E_TIMEOUT_SECS` bounds the run.
 Not covered automatically: the hotkey capture and clipboard-paste layers need
 TCC permissions and a real input device, so they stay manual — test via the
 Settings UI General page ("Test recording", "Test sidecar").
+Post-processing needs Apple Intelligence, which CI runners don't have, so test it
+via "Try it" on the Post-processing page.

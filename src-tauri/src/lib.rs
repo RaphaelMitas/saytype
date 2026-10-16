@@ -4,6 +4,7 @@ mod audio;
 mod config;
 mod e2e;
 mod hotkey;
+mod post_processing;
 mod preview;
 mod remote;
 mod sidecar;
@@ -438,6 +439,12 @@ pub fn run() {
             restart_app,
             get_local_ip,
             get_platform,
+            post_processing::get_post_processing,
+            post_processing::set_post_processing_enabled,
+            post_processing::select_post_processing_prompt,
+            post_processing::save_post_processing_prompt,
+            post_processing::reset_post_processing_prompt,
+            post_processing::test_post_processing,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

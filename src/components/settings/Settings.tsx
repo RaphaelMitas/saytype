@@ -1,5 +1,14 @@
 import { cn } from "cn";
-import { Globe, House, Info, Keyboard, type LucideIcon, RefreshCw, Shield } from "lucide-react";
+import {
+  Globe,
+  House,
+  Info,
+  Keyboard,
+  type LucideIcon,
+  RefreshCw,
+  Shield,
+  Sparkles,
+} from "lucide-react";
 import { useState } from "react";
 import { PermissionList } from "@/components/PermissionList";
 import { AboutPage } from "@/components/settings/AboutPage";
@@ -7,24 +16,33 @@ import { GeneralPage } from "@/components/settings/GeneralPage";
 import { HotkeyPage } from "@/components/settings/HotkeyPage";
 import { ModePage } from "@/components/settings/ModePage";
 import { PageHeader } from "@/components/settings/PageHeader";
+import { PostProcessingPage } from "@/components/settings/PostProcessingPage";
 import { Button } from "@/components/ui/button";
 import { missingPermissions, type Platform, usePermissions } from "@/hooks/usePermissions";
 import { useRecording } from "@/hooks/useRecording";
 import { useSelfTest } from "@/hooks/useSelfTest";
 import type { NetworkConfig } from "@/lib/network";
 
-type Page = "general" | "hotkey" | "mode" | "permissions" | "about";
+type Page = "general" | "hotkey" | "post_processing" | "mode" | "permissions" | "about";
 
 interface NavItem {
   page: Page;
   label: string;
   icon: LucideIcon;
   hiddenInServerMode?: boolean;
+  macOnly?: boolean;
 }
 
 const NAV: NavItem[] = [
   { page: "general", label: "General", icon: House },
   { page: "hotkey", label: "Hotkey", icon: Keyboard, hiddenInServerMode: true },
+  {
+    page: "post_processing",
+    label: "Post-processing",
+    icon: Sparkles,
+    hiddenInServerMode: true,
+    macOnly: true,
+  },
   { page: "mode", label: "Mode", icon: Globe },
   { page: "permissions", label: "Permissions", icon: Shield, hiddenInServerMode: true },
 ];
@@ -71,7 +89,10 @@ export function Settings({ platform, runningNetwork, hotkey, onHotkeyChange }: S
   return (
     <div className="flex h-full">
       <nav className="flex w-44 shrink-0 flex-col gap-0.5 border-r bg-sidebar px-2 pt-11 pb-2">
-        {NAV.filter((item) => !(serverOnly && item.hiddenInServerMode)).map(navButton)}
+        {NAV.filter(
+          (item) =>
+            !(serverOnly && item.hiddenInServerMode) && !(platform !== "macos" && item.macOnly),
+        ).map(navButton)}
         <div className="flex-1" />
         {navButton({ page: "about", label: "About", icon: Info })}
       </nav>
@@ -89,6 +110,7 @@ export function Settings({ platform, runningNetwork, hotkey, onHotkeyChange }: S
         {page === "hotkey" && (
           <HotkeyPage platform={platform} hotkey={hotkey} onChange={onHotkeyChange} />
         )}
+        {page === "post_processing" && <PostProcessingPage />}
         {page === "mode" && (
           <ModePage
             platform={platform}

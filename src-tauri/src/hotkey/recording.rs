@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, Manager};
 
 use crate::preview::{self, Outcome};
-use crate::{audio, text_insertion, transcriber, AppState};
+use crate::{audio, post_processing, text_insertion, transcriber, AppState};
 
 static HOTKEY_ACTIVE: AtomicBool = AtomicBool::new(false);
 
@@ -98,6 +98,7 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
             Ok(text) => {
                 println!("[DEBUG] Transcription result: '{}'", text);
                 if !text.is_empty() {
+                    let text = post_processing::apply(text).await;
                     // Before the paste starts, so a fast failure always lands after it
                     preview::finish(&handle, preview_session, Outcome::Pasted(text.clone()));
                     let paste_handle = handle.clone();
