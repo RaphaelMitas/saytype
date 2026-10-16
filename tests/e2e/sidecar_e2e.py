@@ -319,7 +319,6 @@ def test_train_mode(binary: Path, fixture: Path, expected: str) -> None:
         )
         try:
             stdout = LineReader(serve.stdout, "stdout")
-            # A head that can't be loaded falls back to the base model, which transcribes fine
             stderr = LineReader(serve.stderr, "stderr")
             assert serve.stdin is not None
             stdout.wait_for('"ready"', READY_TIMEOUT)
@@ -327,6 +326,7 @@ def test_train_mode(binary: Path, fixture: Path, expected: str) -> None:
                 json.dumps({"command": "transcribe", "audio_path": str(fixture)}) + "\n"
             )
             serve.stdin.flush()
+            # A head that can't be loaded falls back to the base model, which transcribes fine
             stderr.wait_for("[VOCAB] Applied head", TRANSCRIBE_TIMEOUT)
             result = next_json(stdout, TRANSCRIBE_TIMEOUT)
             if not result.get("success"):

@@ -99,6 +99,10 @@ fn example_audio(vocab: &Path, id: &str) -> PathBuf {
     examples_dir(vocab).join(format!("{id}.wav"))
 }
 
+fn head_file(vocab: &Path) -> PathBuf {
+    vocab.join("head.safetensors")
+}
+
 fn head_meta(vocab: &Path) -> PathBuf {
     vocab.join("head.json")
 }
@@ -139,7 +143,8 @@ fn trained_spec(vocab: &Path) -> Option<Value> {
 
 fn needs_training(vocab: &Path, words: &[Word]) -> bool {
     match trained_spec(vocab) {
-        None => !words.is_empty(),
+        // A head without a spec is left over from an interrupted run
+        None => !words.is_empty() || head_file(vocab).exists(),
         Some(trained) => trained != spec(words, &read_examples(vocab)),
     }
 }
@@ -257,7 +262,6 @@ fn stop_child(trainer: &mut Trainer) {
 
 /// After any edit: a run in progress is training the old list, so it stops
 fn changed(app_handle: &tauri::AppHandle) {
-    let _ = app_handle.emit("words-changed", ());
     if !available() {
         return;
     }
@@ -321,7 +325,7 @@ fn start(app_handle: &tauri::AppHandle, trainer: &mut Trainer, vocab: &Path) -> 
 
     let words = config::load_config().words;
     let examples = read_examples(vocab);
-    let head = vocab.join("head.safetensors");
+    let head = head_file(vocab);
     if words.is_empty() {
         let _ = std::fs::remove_file(&head);
         let _ = std::fs::remove_file(head_meta(vocab));
@@ -446,7 +450,7 @@ pub fn get_vocab_status() -> Status {
     let outdated = || {
         available() && vocab_dir().is_ok_and(|v| needs_training(&v, &config::load_config().words))
     };
-    // Before the launch run starts, e.g. after an update, an outdated head isn't up to date
+    // Until the launch run starts, e.g. after an update, report an outdated head as Waiting, not Idle
     if trainer.status == Status::Idle && trainer.child.is_none() && outdated() {
         Status::Waiting
     } else {
@@ -550,7 +554,7 @@ pub fn finish_example_recording(
     text: String,
 ) -> Result<Vec<WordView>, String> {
     let audio = stop_example_recording()?;
-    let seconds = storage::wav_seconds(&audio).unwrap_or(0.0);
+    let seconds = audio::wav_seconds(&audio).unwrap_or(0.0);
     if seconds < 0.5 {
         let _ = std::fs::remove_file(&audio);
         return Err("That was too short. Try again and read the whole sentence.".to_string());
@@ -618,7 +622,7 @@ pub fn teach_from_history(
 
     let copy = std::env::temp_dir().join(format!("saytype-example-{}.wav", storage::new_id()));
     history::copy_recording(&id, &copy)?;
-    let fits = storage::wav_seconds(&copy).is_some_and(|s| s <= MAX_EXAMPLE_SECONDS);
+    let fits = audio::wav_seconds(&copy).is_some_and(|s| s <= MAX_EXAMPLE_SECONDS);
     let example_saved = fits && !words.is_empty();
     if example_saved {
         add_example(&vocab_dir()?, &copy, &text, Source::History)?;
@@ -759,6 +763,13 @@ mod tests {
         assert!(
             needs_training(&vocab, &[]),
             "an empty list still has a head to remove"
+        );
+
+        std::fs::remove_file(head_meta(&vocab)).unwrap();
+        std::fs::write(head_file(&vocab), b"head").unwrap();
+        assert!(
+            needs_training(&vocab, &[]),
+            "a head without a spec still has to go"
         );
         std::fs::remove_dir_all(vocab).unwrap();
     }

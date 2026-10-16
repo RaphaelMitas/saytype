@@ -81,7 +81,7 @@ fn clear(dir: &Path) -> Result<(), String> {
     }
 }
 
-/// Takes over a finished dictation's recording, unless the user turned history off
+/// Takes over a finished dictation's recording
 pub fn keep(app_handle: &tauri::AppHandle, audio: &Path, text: &str) {
     let _guard = lock();
     if config::load_config().history_off {

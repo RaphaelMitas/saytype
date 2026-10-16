@@ -316,10 +316,7 @@ export function HistoryPage({ mode }: { mode: NetworkMode }) {
               onSelect={(index, extend) => select(entry, index, extend)}
               onDraftChange={(draft) => setDraft(entry.id, draft)}
               onDelete={() => run(deleteHistoryEntry(entry.id))}
-              onSaved={(message) => {
-                setNotice(message);
-                reload();
-              }}
+              onSaved={setNotice}
             />
           ))}
         </div>

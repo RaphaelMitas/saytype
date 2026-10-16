@@ -40,7 +40,7 @@ from vocab_templates import DE, EN, FILLERS_DE, FILLERS_EN
 # Bump when anything below changes what a cached clip contains
 RECIPE = 1
 CLIPS_PER_WORD = 16
-FILLER_FRACTION = 0.25
+FILLER_CLIPS = 4
 GERMAN_FRACTION = 0.2
 EPOCHS = 3
 BATCH = 4
@@ -98,7 +98,7 @@ def installed_voices() -> dict[str, list[str]]:
     names = {
         match.group(1)
         for line in listing.stdout.splitlines()
-        if (match := re.match(r"^(.+?)\s{2,}[a-z]{2}_[A-Z]{2}\b", line))
+        if (match := re.match(r"^(.+?)\s+[a-z]{2}_[A-Z]{2}\b", line))
     }
     voices = {lang: [v for v in wanted if v in names] for lang, wanted in VOICES.items()}
     if not voices["en"]:
@@ -150,7 +150,7 @@ def plan_clips(word: str, say_as: str, voices: dict[str, list[str]], rng: random
         }
 
     clips = [clip(word, say_as, False) for _ in range(CLIPS_PER_WORD)]
-    for _ in range(round(FILLER_FRACTION * CLIPS_PER_WORD)):
+    for _ in range(FILLER_CLIPS):
         lang = rng.choice(langs)
         filler = rng.choice(FILLERS[lang])
         clips.append(clip(filler, filler, True))
@@ -182,6 +182,10 @@ def add_noise(audio: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     snr_db = rng.uniform(15, 40)
     power = np.mean(audio**2) / (10 ** (snr_db / 10))
     return (audio + rng.normal(0, np.sqrt(power), audio.shape)).astype(np.float32)
+
+
+def row(features: mx.array, tokens: list[int]) -> dict:
+    return {"features": np.array(features[0].astype(mx.float16)), "tokens": tokens}
 
 
 def save_rows(path: Path, rows: list[dict]) -> None:
@@ -233,7 +237,7 @@ def word_rows(word: dict, voices, model: Model, cache_dir: Path, on_clip) -> lis
                 if clip["filler"]
                 else model.tokenizer.EncodeAsIds(clip["written"])
             )
-            rows.append({"features": np.array(features[0].astype(mx.float16)), "tokens": tokens})
+            rows.append(row(features, tokens))
             on_clip()
     save_rows(path, rows)
     return rows
@@ -249,13 +253,7 @@ def example_rows(example: dict, model: Model, cache_dir: Path) -> list[dict]:
         audio = audio.mean(axis=1)
     if sr != SAMPLE_RATE or len(audio) > MAX_EXAMPLE_SECONDS * SAMPLE_RATE:
         return []
-    features = model.encode(audio)
-    rows = [
-        {
-            "features": np.array(features[0].astype(mx.float16)),
-            "tokens": model.tokenizer.EncodeAsIds(example["text"]),
-        }
-    ]
+    rows = [row(model.encode(audio), model.tokenizer.EncodeAsIds(example["text"]))]
     save_rows(path, rows)
     return rows
 
@@ -341,8 +339,7 @@ def write_head(weights: dict[str, mx.array], head_path: Path, meta_path: Path, s
     head_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = head_path.with_name(".head.tmp.safetensors")
     mx.save_safetensors(str(tmp), weights)
-    # Head and spec can't be swapped together, so for a moment there's no spec, which only means
-    # one more retrain if the run dies right here; a stale spec could pass for up to date
+    # No spec beats a stale one: a crash here costs a retrain, never an old head passing as current
     meta_path.unlink(missing_ok=True)
     tmp.replace(head_path)
     meta_tmp = meta_path.with_name(f".{meta_path.name}.tmp")
@@ -358,8 +355,7 @@ def run(job_path: Path, model, model_name: str) -> None:
     base = Model(model, model_name)
 
     missing = sum(not word_cache(word, voices, cache_dir).exists() for word in words)
-    clips_per_word = CLIPS_PER_WORD + round(FILLER_FRACTION * CLIPS_PER_WORD)
-    prepare_units = missing * clips_per_word
+    prepare_units = missing * (CLIPS_PER_WORD + FILLER_CLIPS)
     done = 0
 
     def on_clip():

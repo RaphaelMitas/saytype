@@ -247,6 +247,11 @@ fn resample_audio(samples: &[f32], source_rate: u32, target_rate: u32) -> Result
 }
 
 /// Write samples to a WAV file
+pub fn wav_seconds(path: &std::path::Path) -> Option<f32> {
+    let reader = hound::WavReader::open(path).ok()?;
+    Some(reader.duration() as f32 / reader.spec().sample_rate as f32)
+}
+
 fn write_wav_file(path: &str, samples: &[f32], sample_rate: u32) -> Result<(), String> {
     let spec = WavSpec {
         channels: 1,

@@ -51,12 +51,6 @@ pub fn move_file(from: &Path, to: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn wav_seconds(path: &Path) -> Option<f32> {
-    let reader = hound::WavReader::open(path).ok()?;
-    let spec = reader.spec();
-    Some(reader.duration() as f32 / spec.sample_rate as f32)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
