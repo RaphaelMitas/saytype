@@ -341,8 +341,10 @@ def write_head(weights: dict[str, mx.array], head_path: Path, meta_path: Path, s
     head_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = head_path.with_name(".head.tmp.safetensors")
     mx.save_safetensors(str(tmp), weights)
+    # Head and spec can't be swapped together, so for a moment there's no spec, which only means
+    # one more retrain if the run dies right here; a stale spec could pass for up to date
+    meta_path.unlink(missing_ok=True)
     tmp.replace(head_path)
-    # Written last: a crash in between leaves a stale spec, which only means one more retrain
     meta_tmp = meta_path.with_name(f".{meta_path.name}.tmp")
     meta_tmp.write_text(json.dumps({"spec": spec, "trained_at": time.time()}))
     meta_tmp.replace(meta_path)
