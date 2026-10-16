@@ -8,6 +8,12 @@ import type { UseRecordingResult } from "@/hooks/useRecording";
 import type { SelfTest } from "@/hooks/useSelfTest";
 import { DEFAULT_PORT, type NetworkConfig } from "@/lib/network";
 
+function joinNames(names: string[]): string {
+  return names.length > 1
+    ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
+    : names.join("");
+}
+
 interface GeneralPageProps extends UseRecordingResult {
   selfTest: SelfTest;
   network: NetworkConfig;
@@ -110,7 +116,7 @@ export function GeneralPage({
         <div className="flex items-center gap-3 rounded-xl border border-destructive/40 bg-card p-4">
           <div className="flex-1">
             <div className="text-sm font-semibold">
-              {missingPermissions.join(" and ")} {missingPermissions.length > 1 ? "are" : "is"} off
+              {joinNames(missingPermissions)} {missingPermissions.length > 1 ? "are" : "is"} off
             </div>
             <div className="text-xs text-muted-foreground">
               Saytype can't record or paste until{" "}

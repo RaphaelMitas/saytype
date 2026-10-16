@@ -129,7 +129,9 @@ export function PermissionList({
             variant="link"
             size="xs"
             className="h-auto px-0"
-            onClick={async () => (await restartApp()) || invoke("quit_app")}
+            onClick={async () => {
+              if (!(await restartApp())) await invoke("quit_app");
+            }}
           >
             Quit and reopen
           </Button>

@@ -107,7 +107,7 @@ export function HotkeyPage({ platform, hotkey, onChange }: HotkeyPageProps) {
           <div className="text-xs text-muted-foreground">Press the new shortcut</div>
           <Kbd className="h-11 border-b-[3px] px-4 text-lg text-primary">
             {pendingKeys.length > 0
-              ? pendingKeys.map((k) => formatKeyCode(k.code, platform)).join(" + ")
+              ? pendingKeys.map((k) => formatKeyCode(k.code, platform)).join("+")
               : "…"}
           </Kbd>
           <Button

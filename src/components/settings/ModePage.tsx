@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { Check, Copy } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,15 +54,22 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
     invoke<string>("get_local_ip").then(setLocalIp).catch(console.error);
   }, []);
 
-  const save = async (config: NetworkConfig, restart: boolean) => {
-    try {
+  // A click can blur the port field, so its save may still be running when restart exits
+  const queue = useRef(Promise.resolve());
+
+  const enqueue = (task: () => Promise<unknown>) => {
+    queue.current = queue.current.then(task).then(
+      () => undefined,
+      (error) => console.error("Failed to save network config:", error),
+    );
+  };
+
+  const save = (config: NetworkConfig, restart: boolean) =>
+    enqueue(async () => {
       await setNetworkConfig(config);
       onSaved(config);
       if (restart) await restartApp();
-    } catch (error) {
-      console.error("Failed to save network config:", error);
-    }
-  };
+    });
 
   const handleModeChange = (value: string) => {
     const next = MODES.find((m) => m.value === value);
@@ -136,7 +143,7 @@ export function ModePage({ platform, running, saved, onSaved, initializing }: Mo
       {needsRestart && (
         <div className="flex items-center gap-2 rounded-lg bg-warning/10 py-1.5 pr-1.5 pl-3 text-xs text-warning">
           <span className="flex-1">Saved. Restart Saytype to apply.</span>
-          <Button variant="outline" size="xs" onClick={restartApp}>
+          <Button variant="outline" size="xs" onClick={() => enqueue(restartApp)}>
             Restart
           </Button>
         </div>
