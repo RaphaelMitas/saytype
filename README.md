@@ -58,7 +58,7 @@ The app runs entirely offline. On first launch, wait for the ML model to load (i
 - [Rust](https://rustup.rs/)
 - [Node.js](https://nodejs.org/) 20+
 - [pnpm](https://pnpm.io/)
-- Python 3.10+
+- Python 3.14 (`brew install python@3.14`)
 
 ### Build
 
