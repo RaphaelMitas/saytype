@@ -1,7 +1,6 @@
-import { listen } from "@tauri-apps/api/event";
 import { cn } from "cn";
 import { Globe, House, Info, Keyboard, type LucideIcon, RefreshCw, Shield } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { PermissionList } from "@/components/PermissionList";
 import { AboutPage } from "@/components/settings/AboutPage";
 import { GeneralPage } from "@/components/settings/GeneralPage";
@@ -12,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { missingPermissions, type Platform, usePermissions } from "@/hooks/usePermissions";
 import { useRecording } from "@/hooks/useRecording";
 import { useSelfTest } from "@/hooks/useSelfTest";
+import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { installUpdate, useUpdateStatus } from "@/hooks/useUpdateStatus";
 import type { NetworkConfig } from "@/lib/network";
 
@@ -45,12 +45,7 @@ export function Settings({ platform, runningNetwork, hotkey, onHotkeyChange }: S
   const { permissions, refresh, requestMicrophone } = usePermissions();
   const update = useUpdateStatus();
 
-  useEffect(() => {
-    const unlisten = listen("show-about", () => setPage("about"));
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
+  useTauriEvent("show-about", () => setPage("about"));
 
   const serverOnly = runningNetwork.mode === "server_only";
   const missing = permissions && !serverOnly ? missingPermissions(permissions, platform) : [];

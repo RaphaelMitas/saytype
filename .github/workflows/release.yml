@@ -34,6 +34,8 @@ jobs:
 
       - name: Build macOS app
         uses: ./.github/actions/build-macos
+        env:
+          SAYTYPE_UPDATER: "1"
         with:
           tag: ${{ steps.tag.outputs.TAG }}
 
@@ -104,10 +106,11 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           BUNDLE_DIR=src-tauri/target/release/bundle/macos
           tar --no-mac-metadata -czf "$BUNDLE_DIR/Saytype.app.tar.gz" -C "$BUNDLE_DIR" Saytype.app
-          pnpm tauri signer sign --app-version "${{ steps.version.outputs.VERSION }}" "$BUNDLE_DIR/Saytype.app.tar.gz"
+          pnpm tauri signer sign --app-version "$VERSION" "$BUNDLE_DIR/Saytype.app.tar.gz"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v7

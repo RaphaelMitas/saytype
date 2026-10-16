@@ -28,41 +28,18 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn build_menu(app: &AppHandle, ready_version: Option<&str>) -> tauri::Result<Menu<tauri::Wry>> {
+    let item = |id: &str, label: &str| MenuItem::with_id(app, id, label, true, None::<&str>);
     let menu = Menu::new(app)?;
     if let Some(version) = ready_version {
         let label = format!("Restart to Update ({})", version);
-        menu.append(&MenuItem::with_id(
-            app,
-            "install_update",
-            label,
-            true,
-            None::<&str>,
-        )?)?;
+        menu.append(&item("install_update", &label)?)?;
         menu.append(&PredefinedMenuItem::separator(app)?)?;
     }
-    menu.append(&MenuItem::with_id(
-        app,
-        "settings",
-        "Settings...",
-        true,
-        None::<&str>,
-    )?)?;
+    menu.append(&item("settings", "Settings...")?)?;
     if ready_version.is_none() && crate::updater::is_supported() {
-        menu.append(&MenuItem::with_id(
-            app,
-            "check_updates",
-            "Check for Updates...",
-            true,
-            None::<&str>,
-        )?)?;
+        menu.append(&item("check_updates", "Check for Updates...")?)?;
     }
-    menu.append(&MenuItem::with_id(
-        app,
-        "quit",
-        "Quit Saytype",
-        true,
-        None::<&str>,
-    )?)?;
+    menu.append(&item("quit", "Quit Saytype")?)?;
     Ok(menu)
 }
 
@@ -76,14 +53,14 @@ fn setup_tray_inner(app: &AppHandle, tooltip: &str) -> Result<(), Box<dyn std::e
         .tooltip(tooltip)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "settings" => show_settings(app),
-            "install_update" => {
-                let _ = crate::updater::install_and_restart(app);
-            }
+            "install_update" => crate::updater::install_and_restart(app),
             "check_updates" => {
                 show_settings(app);
                 let _ = app.emit("show-about", ());
                 let app = app.clone();
-                tauri::async_runtime::spawn(async move { crate::updater::check(&app).await });
+                tauri::async_runtime::spawn(async move {
+                    crate::updater::check_and_download(&app).await
+                });
             }
             "quit" => {
                 app.exit(0);
@@ -109,9 +86,8 @@ pub fn show_settings(app: &AppHandle) {
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn set_recording_state(app: &AppHandle, is_recording: bool) {
     IS_RECORDING.store(is_recording, Ordering::Relaxed);
-    let tray_guard = TRAY_ICON.lock().unwrap();
-    if let Some(ref tray) = *tray_guard {
-        refresh_icon(app, tray);
+    if let Some(tray) = tray_icon() {
+        refresh_icon(app, &tray);
 
         // Update tooltip
         let tooltip = if is_recording {
@@ -123,15 +99,18 @@ pub fn set_recording_state(app: &AppHandle, is_recording: bool) {
     }
 }
 
-/// Adds or removes the "Restart to Update" item and the badge on the tray icon.
+// Cloned out so no lock is held while tray calls wait on the main thread
+fn tray_icon() -> Option<TrayIcon> {
+    TRAY_ICON.lock().unwrap().clone()
+}
+
 pub fn set_update_ready(app: &AppHandle, version: Option<&str>) {
     UPDATE_READY.store(version.is_some(), Ordering::Relaxed);
-    let tray_guard = TRAY_ICON.lock().unwrap();
-    if let Some(ref tray) = *tray_guard {
+    if let Some(tray) = tray_icon() {
         if let Ok(menu) = build_menu(app, version) {
             let _ = tray.set_menu(Some(menu));
         }
-        refresh_icon(app, tray);
+        refresh_icon(app, &tray);
     }
 }
 
@@ -166,7 +145,6 @@ fn load_icon(app: &AppHandle, icon_name: &str) -> Option<Image<'static>> {
     Image::from_path(dev_path).ok()
 }
 
-/// Draws an anti-aliased dot in the top-right corner, like a notification badge.
 fn with_badge(icon: &Image<'_>) -> Image<'static> {
     let (width, height) = (icon.width(), icon.height());
     let mut rgba = icon.rgba().to_vec();

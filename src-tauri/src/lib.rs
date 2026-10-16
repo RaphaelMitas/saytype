@@ -95,35 +95,41 @@ async fn quit_app(app_handle: tauri::AppHandle) {
 
 /// Restarts the app. Returns true if restarting, false if in dev mode (manual restart needed).
 #[tauri::command]
-async fn restart_app() -> Result<bool, String> {
+async fn restart_app(app_handle: tauri::AppHandle) -> Result<bool, String> {
     if cfg!(debug_assertions) {
         // Dev mode: can't restart because the Tauri CLI owns the process lifecycle
         return Ok(false);
     }
-    relaunch()
+    app_handle
+        .run_on_main_thread(|| {
+            let _ = updater::install_pending();
+            relaunch()
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+pub(crate) fn app_bundle() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    exe.ancestors()
+        .find(|path| path.extension().is_some_and(|ext| ext == "app"))
+        .map(std::path::Path::to_path_buf)
 }
 
 pub(crate) fn relaunch() -> ! {
-    #[allow(unused_variables)]
+    #[cfg(target_os = "macos")]
+    if let Some(bundle) = app_bundle() {
+        let _ = std::process::Command::new("sh")
+            .args(["-c", "sleep 0.5 && open -n \"$1\"", "sh"])
+            .arg(bundle)
+            .spawn();
+    }
+    #[cfg(target_os = "windows")]
     if let Ok(exe) = std::env::current_exe() {
-        #[cfg(target_os = "macos")]
-        {
-            let exe_str = exe.to_string_lossy().to_string();
-            if let Some(app_end) = exe_str.find(".app/") {
-                let app_path = &exe_str[..app_end + 4];
-                let _ = std::process::Command::new("sh")
-                    .arg("-c")
-                    .arg(format!("sleep 0.5 && open -n '{}'", app_path))
-                    .spawn();
-            }
-        }
-        #[cfg(target_os = "windows")]
-        {
-            let exe_str = exe.to_string_lossy().to_string();
-            let _ = std::process::Command::new("cmd")
-                .args(["/C", &format!("timeout /t 1 >nul && \"{}\"", exe_str)])
-                .spawn();
-        }
+        let exe_str = exe.to_string_lossy().to_string();
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", &format!("timeout /t 1 >nul && \"{}\"", exe_str)])
+            .spawn();
     }
     std::process::exit(0);
 }
@@ -135,12 +141,15 @@ fn get_update_status() -> updater::UpdateStatus {
 
 #[tauri::command]
 async fn check_for_updates(app_handle: tauri::AppHandle) {
-    updater::check(&app_handle).await;
+    updater::check_and_download(&app_handle).await;
 }
 
 #[tauri::command]
-async fn install_update(app_handle: tauri::AppHandle) -> Result<(), String> {
-    updater::install_and_restart(&app_handle)
+fn install_update(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let handle = app_handle.clone();
+    app_handle
+        .run_on_main_thread(move || updater::install_and_restart(&handle))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -469,9 +478,7 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|_, event| {
             if let RunEvent::Exit = event {
-                if let Err(e) = updater::install_pending() {
-                    eprintln!("[UPDATER] Install on quit failed: {}", e);
-                }
+                let _ = updater::install_pending();
             }
         });
 }

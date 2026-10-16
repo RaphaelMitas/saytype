@@ -1,7 +1,9 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::error::Error;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 // Awake time, not wall time: the clock behind tokio's sleep pauses while the Mac sleeps
@@ -28,9 +30,14 @@ pub enum UpdateStatus {
     },
 }
 
+struct Pending {
+    update: Update,
+    archive: PathBuf,
+}
+
 struct UpdaterState {
     status: UpdateStatus,
-    pending: Option<(Update, Vec<u8>)>,
+    pending: Option<Pending>,
 }
 
 lazy_static::lazy_static! {
@@ -40,10 +47,9 @@ lazy_static::lazy_static! {
     });
 }
 
-/// Release builds on macOS only: dev builds would replace themselves with the latest release,
-/// and releases ship no Windows update feed.
+/// Only the release workflow sets SAYTYPE_UPDATER: a local build would replace itself with the published release.
 pub fn is_supported() -> bool {
-    cfg!(target_os = "macos") && !cfg!(debug_assertions) && !crate::e2e::is_enabled()
+    option_env!("SAYTYPE_UPDATER").is_some() && !crate::e2e::is_enabled()
 }
 
 pub fn status() -> UpdateStatus {
@@ -64,14 +70,13 @@ pub fn start(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         loop {
-            check(&app).await;
+            check_and_download(&app).await;
             tokio::time::sleep(CHECK_INTERVAL).await;
         }
     });
 }
 
-/// Checks for an update and downloads it, leaving it ready to install on the next restart.
-pub async fn check(app: &AppHandle) {
+pub async fn check_and_download(app: &AppHandle) {
     {
         let mut state = STATE.lock().unwrap();
         if !matches!(
@@ -85,9 +90,9 @@ pub async fn check(app: &AppHandle) {
     let _ = app.emit("update-status", UpdateStatus::Checking);
 
     match download(app).await {
-        Ok(Some((update, bytes))) => {
-            let version = update.version.clone();
-            STATE.lock().unwrap().pending = Some((update, bytes));
+        Ok(Some(pending)) => {
+            let version = pending.update.version.clone();
+            STATE.lock().unwrap().pending = Some(pending);
             set_status(
                 app,
                 UpdateStatus::Ready {
@@ -109,7 +114,7 @@ pub async fn check(app: &AppHandle) {
     }
 }
 
-async fn download(app: &AppHandle) -> tauri_plugin_updater::Result<Option<(Update, Vec<u8>)>> {
+async fn download(app: &AppHandle) -> Result<Option<Pending>, Box<dyn Error>> {
     let Some(update) = app.updater()?.check().await? else {
         return Ok(None);
     };
@@ -137,29 +142,56 @@ async fn download(app: &AppHandle) -> tauri_plugin_updater::Result<Option<(Updat
         )
         .await?;
 
-    Ok(Some((update, bytes)))
+    // On disk rather than in memory: a menu bar app can sit on a ready update for days
+    let cache_dir = app.path().app_cache_dir()?;
+    tokio::fs::create_dir_all(&cache_dir).await?;
+    let archive = cache_dir.join("update.tar.gz");
+    tokio::fs::write(&archive, bytes).await?;
+
+    Ok(Some(Pending { update, archive }))
 }
 
-/// Swaps the app bundle for the downloaded update. Returns false when none is pending.
-pub fn install_pending() -> Result<bool, String> {
-    // Held for the whole install so a second restart or a quit waits instead of exiting mid-swap
-    let mut state = STATE.lock().unwrap();
-    let Some((update, bytes)) = state.pending.take() else {
-        return Ok(false);
+/// Main thread only: the plugin asks for an admin password on the main thread when the app
+/// isn't writable, so a main thread waiting on an install elsewhere would deadlock.
+pub fn install_pending() -> Result<(), String> {
+    let Some(Pending { update, archive }) = STATE.lock().unwrap().pending.take() else {
+        return Ok(());
     };
-    update.install(bytes).map_err(|e| e.to_string())?;
-    Ok(true)
+    let result = install(&update, &archive).map_err(|e| e.to_string());
+    let _ = std::fs::remove_file(&archive);
+    if let Err(e) = &result {
+        eprintln!("[UPDATER] Install failed: {}", e);
+    }
+    result
 }
 
-pub fn install_and_restart(app: &AppHandle) -> Result<(), String> {
-    match install_pending() {
-        Ok(true) => crate::relaunch(),
-        Ok(false) => Ok(()),
-        Err(e) => {
-            eprintln!("[UPDATER] Install failed: {}", e);
-            set_status(app, UpdateStatus::Error { message: e.clone() });
-            crate::tray::set_update_ready(app, None);
-            Err(e)
-        }
+fn install(update: &Update, archive: &Path) -> Result<(), Box<dyn Error>> {
+    // Replaced while running, e.g. by `brew upgrade`: installing would downgrade it
+    if installed_version().as_deref() != Some(update.current_version.as_str()) {
+        return Ok(());
     }
+    update.install(std::fs::read(archive)?)?;
+    Ok(())
+}
+
+fn installed_version() -> Option<String> {
+    #[derive(Deserialize)]
+    struct InfoPlist {
+        #[serde(rename = "CFBundleShortVersionString")]
+        version: String,
+    }
+    let info_plist = crate::app_bundle()?.join("Contents/Info.plist");
+    plist::from_file::<_, InfoPlist>(info_plist)
+        .ok()
+        .map(|info| info.version)
+}
+
+/// Main thread only, see [`install_pending`].
+pub fn install_and_restart(app: &AppHandle) {
+    if let Err(message) = install_pending() {
+        set_status(app, UpdateStatus::Error { message });
+        crate::tray::set_update_ready(app, None);
+        return;
+    }
+    crate::relaunch()
 }

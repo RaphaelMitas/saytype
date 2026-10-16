@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
+import { useTauriEvent } from "@/hooks/useTauriEvent";
 
 export type UpdateStatus =
   | { state: "disabled" | "idle" | "checking" | "upToDate" }
@@ -11,12 +11,10 @@ export type UpdateStatus =
 export function useUpdateStatus(): UpdateStatus | null {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
 
+  useTauriEvent<UpdateStatus>("update-status", setStatus);
+
   useEffect(() => {
-    const unlisten = listen<UpdateStatus>("update-status", (event) => setStatus(event.payload));
     invoke<UpdateStatus>("get_update_status").then(setStatus).catch(console.error);
-    return () => {
-      unlisten.then((fn) => fn());
-    };
   }, []);
 
   return status;
