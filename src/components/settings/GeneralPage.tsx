@@ -1,0 +1,151 @@
+import { cn } from "cn";
+import { Check, Copy, Mic } from "lucide-react";
+import { PageHeader } from "@/components/settings/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
+import { useCopied } from "@/hooks/useCopied";
+import type { UseRecordingResult } from "@/hooks/useRecording";
+import type { SelfTest } from "@/hooks/useSelfTest";
+import { DEFAULT_PORT, type NetworkConfig } from "@/lib/network";
+
+function joinNames(names: string[]): string {
+  return names.length > 1
+    ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
+    : names.join("");
+}
+
+interface GeneralPageProps extends UseRecordingResult {
+  selfTest: SelfTest;
+  network: NetworkConfig;
+  hotkey: string;
+  missingPermissions: string[];
+  onFixPermissions: () => void;
+}
+
+export function GeneralPage({
+  state,
+  lastTranscription,
+  lastError,
+  selfTest,
+  network,
+  hotkey,
+  missingPermissions,
+  onFixPermissions,
+}: GeneralPageProps) {
+  const { copied, copy } = useCopied();
+  const serverOnly = network.mode === "server_only";
+
+  const status = (() => {
+    switch (state) {
+      case "initializing":
+        if (network.mode === "client_only") {
+          return network.server_url
+            ? { label: "Connecting to server…", dot: "bg-warning" }
+            : { label: "No server URL configured", dot: "bg-muted-foreground" };
+        }
+        return { label: serverOnly ? "Starting server…" : "Loading model…", dot: "bg-warning" };
+      case "recording":
+        return { label: "Recording", dot: "bg-destructive animate-pulse" };
+      case "processing":
+        return { label: "Transcribing…", dot: "bg-primary" };
+      default:
+        if (network.mode === "client_only" && lastError) {
+          return { label: "Not connected", dot: "bg-muted-foreground" };
+        }
+        return { label: "Ready", dot: "bg-success" };
+    }
+  })();
+
+  const detail =
+    network.mode === "local"
+      ? "On-device"
+      : network.mode === "client_only"
+        ? (network.server_url ?? "Remote server")
+        : `Serving on port ${network.server_port ?? DEFAULT_PORT}`;
+
+  return (
+    <>
+      <PageHeader
+        title="General"
+        description={
+          serverOnly ? (
+            "Serving transcription over HTTP. The hotkey is off."
+          ) : (
+            <>
+              Hold <Kbd>{hotkey}</Kbd> anywhere to dictate.
+            </>
+          )
+        }
+      />
+
+      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+        <div className="flex items-center gap-3">
+          <span className={cn("size-2 shrink-0 rounded-full", status.dot)} />
+          <div className="flex-1">
+            <div className="text-sm font-semibold">{status.label}</div>
+            <div className="text-xs text-muted-foreground">{detail}</div>
+          </div>
+          {!serverOnly && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                disabled={state === "initializing"}
+                onClick={selfTest.testSidecar}
+              >
+                Test sidecar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={selfTest.isRecording || state === "initializing"}
+                onClick={selfTest.testRecording}
+              >
+                <Mic />
+                {selfTest.isRecording ? "Recording…" : "Test recording"}
+              </Button>
+            </>
+          )}
+        </div>
+        {selfTest.status && <p className="text-xs text-muted-foreground">{selfTest.status}</p>}
+        {lastError && <p className="text-xs text-destructive">{lastError}</p>}
+      </div>
+
+      {missingPermissions.length > 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-destructive/40 bg-card p-4">
+          <div className="flex-1">
+            <div className="text-sm font-semibold">
+              {joinNames(missingPermissions)} {missingPermissions.length > 1 ? "are" : "is"} off
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Saytype can't record or paste until{" "}
+              {missingPermissions.length > 1 ? "they're" : "it's"} on.
+            </div>
+          </div>
+          <Button size="sm" onClick={onFixPermissions}>
+            Fix
+          </Button>
+        </div>
+      )}
+
+      {lastTranscription && (
+        <div className="flex flex-col gap-1.5">
+          <div className="text-xs font-semibold text-muted-foreground">Last transcription</div>
+          <div className="flex items-start gap-2 rounded-lg bg-muted py-2 pr-2 pl-3 text-sm select-text">
+            <span className="flex-1 py-0.5">{lastTranscription}</span>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Copy"
+              className="text-muted-foreground"
+              onClick={() => copy(lastTranscription)}
+            >
+              {copied ? <Check /> : <Copy />}
+            </Button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

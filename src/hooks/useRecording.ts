@@ -68,26 +68,3 @@ export function useRecording(): UseRecordingResult {
     lastError,
   };
 }
-
-// "blocked": the app that launched Saytype can't grant microphone access
-export type MicPermission = "granted" | "denied" | "undetermined" | "blocked";
-
-export interface Permissions {
-  microphone: MicPermission;
-  accessibility: boolean;
-  input_monitoring: boolean;
-}
-
-export async function checkPermissions(): Promise<Permissions> {
-  return await invoke("check_permissions");
-}
-
-export async function requestMicrophonePermission(): Promise<MicPermission> {
-  return await invoke("request_microphone_permission");
-}
-
-export type PrivacyPane = "microphone" | "accessibility" | "input_monitoring";
-
-export async function openPrivacySettings(pane: PrivacyPane): Promise<void> {
-  return await invoke("open_privacy_settings", { pane });
-}

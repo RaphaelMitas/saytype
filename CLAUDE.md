@@ -115,4 +115,4 @@ client vs server, `SAYTYPE_E2E_TIMEOUT_SECS` bounds the run.
 
 Not covered automatically: the hotkey capture and clipboard-paste layers need
 TCC permissions and a real input device, so they stay manual — test via the
-Settings UI ("Test Record (3s)", "Test Sidecar").
+Settings UI General page ("Test recording", "Test sidecar").
