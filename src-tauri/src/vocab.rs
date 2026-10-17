@@ -720,7 +720,7 @@ mod tests {
         assert!(clean_word("-o/tmp/x", &[]).is_err());
         assert!(clean_word(&"a".repeat(MAX_WORD_CHARS + 1), &[]).is_err());
         let full: Vec<Word> = (0..MAX_WORDS).map(|i| word(&format!("w{i}"))).collect();
-        assert!(clean_word("Kimeta", &full).is_err());
+        assert!(clean_word("Flatsby", &full).is_err());
     }
 
     #[test]
@@ -734,8 +734,8 @@ mod tests {
 
     #[test]
     fn an_example_shows_under_every_word_it_mentions() {
-        let words = [word("Flatsby"), word("Kimeta"), word("Tauri")];
-        let examples = [example("Flatsby and Kimeta ship today")];
+        let words = [word("Flatsby"), word("Photopipe"), word("Tauri")];
+        let examples = [example("Flatsby and Photopipe ship today")];
 
         let counts: Vec<usize> = views(&words, &examples, None)
             .iter()
@@ -747,9 +747,9 @@ mod tests {
 
     #[test]
     fn a_word_is_learned_only_as_it_was_trained() {
-        let trained = spec(&[word("Flatsby"), word("Kimeta")], &[]);
-        let mut renamed = word("Kimeta");
-        renamed.say_as = Some("key metta".to_string());
+        let trained = spec(&[word("Flatsby"), word("Photopipe")], &[]);
+        let mut renamed = word("Photopipe");
+        renamed.say_as = Some("photo pipe".to_string());
         let current = [word("Flatsby"), renamed, word("Tauri")];
 
         let learned: Vec<bool> = views(&current, &[], Some(&trained))
@@ -791,7 +791,7 @@ mod tests {
         std::fs::write(head_meta(&vocab), meta).unwrap();
 
         assert!(!needs_training(&vocab, &words));
-        assert!(needs_training(&vocab, &[word("Flatsby"), word("Kimeta")]));
+        assert!(needs_training(&vocab, &[word("Flatsby"), word("Photopipe")]));
         assert!(
             needs_training(&vocab, &[]),
             "an empty list still has a head to remove"

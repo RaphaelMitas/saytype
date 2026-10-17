@@ -399,7 +399,7 @@ export function WordsPage({ mode }: { mode: NetworkMode }) {
         <div className="flex gap-2">
           <Input
             value={draft}
-            placeholder="Add a word, like Kimeta"
+            placeholder="Add a word, like Kubernetes"
             onChange={(e) => setDraft(e.target.value)}
           />
           <Button type="submit" disabled={!draft.trim()}>

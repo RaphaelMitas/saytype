@@ -49,7 +49,7 @@ mockIPC(
               },
             ],
           },
-          word("Kimeta"),
+          word("Kubernetes"),
           word("Photopipe"),
           word("FastAPI"),
           word("pnpm"),
@@ -72,7 +72,7 @@ mockIPC(
               at_ms: minutesAgo(14),
               text: "Can you check whether stateype still works in client mode?",
             },
-            { id: "3", at_ms: minutesAgo(65), text: "Kimeta wants the new search page by Friday." },
+            { id: "3", at_ms: minutesAgo(65), text: "Send me the Kubernetes logs by Friday." },
             {
               id: "4",
               at_ms: minutesAgo(70),
