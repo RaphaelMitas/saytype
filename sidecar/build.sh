@@ -9,10 +9,13 @@ OUTPUT_DIR="$PROJECT_ROOT/src-tauri/binaries"
 
 echo "Building transcription server sidecar..."
 
-# Create virtual environment if it doesn't exist
-if [ ! -d "$SCRIPT_DIR/venv" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv "$SCRIPT_DIR/venv"
+# Matches CI. Python 3.10 caps scipy at 1.15, whose wheels macOS 27 refuses to load.
+PYTHON=python3.14
+
+if [ ! -x "$SCRIPT_DIR/venv/bin/$PYTHON" ]; then
+    echo "Creating virtual environment with $PYTHON..."
+    rm -rf "$SCRIPT_DIR/venv"
+    "$PYTHON" -m venv "$SCRIPT_DIR/venv"
 fi
 
 # Activate virtual environment
