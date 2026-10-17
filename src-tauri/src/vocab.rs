@@ -240,13 +240,15 @@ fn set_status(app_handle: &tauri::AppHandle, trainer: &mut Trainer, status: Stat
 /// SIGTERM, since the PyInstaller bootloader passes it on to the trainer while SIGKILL would leave
 /// the trainer running. Not in the first moments, when the bootloader is still unpacking and
 /// would leave its temp dir behind.
-fn terminate(child: &Child, spawned: Instant) {
+fn terminate(child: &mut Child, spawned: Instant) {
     let unpacked = spawned + Duration::from_millis(1500);
     std::thread::sleep(unpacked.saturating_duration_since(Instant::now()));
     #[cfg(unix)]
     let _ = std::process::Command::new("kill")
         .args(["-TERM", &child.id().to_string()])
         .status();
+    #[cfg(not(unix))]
+    let _ = child.kill();
 }
 
 /// Waits off the caller's thread, which is often the UI's
@@ -255,7 +257,7 @@ fn stop_child(trainer: &mut Trainer) {
         return;
     };
     std::thread::spawn(move || {
-        terminate(&child, spawned);
+        terminate(&mut child, spawned);
         let deadline = Instant::now() + Duration::from_secs(5);
         while Instant::now() < deadline {
             if !matches!(child.try_wait(), Ok(None)) {
@@ -428,8 +430,8 @@ fn start(app_handle: &tauri::AppHandle, trainer: &mut Trainer, vocab: &Path) -> 
 }
 
 pub fn shutdown() {
-    if let Some((child, spawned)) = lock_trainer().child.take() {
-        terminate(&child, spawned);
+    if let Some((mut child, spawned)) = lock_trainer().child.take() {
+        terminate(&mut child, spawned);
     }
 }
 
