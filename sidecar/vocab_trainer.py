@@ -22,6 +22,7 @@ import re
 import subprocess
 import tempfile
 import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -115,6 +116,8 @@ class Model:
     def unwritable(self, text: str) -> str:
         """Characters the model has no token for; training on them would teach it to type <unk>."""
         unk = self.tokenizer.unk_id()
+        # The tokenizer normalizes whole strings, so a lone combining accent would look unwritable
+        text = unicodedata.normalize("NFKC", text)
         return "".join(sorted({c for c in text if unk in self.tokenizer.EncodeAsIds(c)}))
 
     def own_transcript(self, features: mx.array) -> list[int]:
