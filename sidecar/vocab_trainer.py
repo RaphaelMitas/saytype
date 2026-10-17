@@ -146,8 +146,9 @@ def plan_clips(word: str, say_as: str, voices: dict[str, list[str]], rng: random
     return clips
 
 
-def speak(clip: dict, path: Path) -> np.ndarray:
-    subprocess.run(
+def speak(clip: dict, path: Path) -> np.ndarray | None:
+    """None when the voice can't render, so one broken third-party voice doesn't fail every run."""
+    result = subprocess.run(
         [
             "say",
             "-v",
@@ -160,9 +161,10 @@ def speak(clip: dict, path: Path) -> np.ndarray:
             "--",
             clip["spoken"],
         ],
-        check=True,
         capture_output=True,
     )
+    if result.returncode != 0 or not path.exists():
+        return None
     audio, _ = sf.read(str(path), dtype="float32")
     return audio
 
@@ -204,10 +206,21 @@ def word_cache(word: dict, voices, cache_dir: Path) -> Path:
     return cache_dir / "words" / f"{key}.npz"
 
 
+def cached_rows(path: Path) -> list[dict] | None:
+    """A cache file that can't be read is rebuilt instead of failing every run."""
+    if not path.exists():
+        return None
+    try:
+        return load_rows(path)
+    except Exception:
+        path.unlink(missing_ok=True)
+        return None
+
+
 def word_rows(word: dict, voices, model: Model, cache_dir: Path, on_clip) -> list[dict]:
     path = word_cache(word, voices, cache_dir)
-    if path.exists():
-        return load_rows(path)
+    if (rows := cached_rows(path)) is not None:
+        return rows
 
     rng = random.Random(path.stem)
     noise = np.random.default_rng(int(path.stem, 16))
@@ -218,6 +231,9 @@ def word_rows(word: dict, voices, model: Model, cache_dir: Path, on_clip) -> lis
         )
         rows = []
         for clip, audio in zip(clips, audios, strict=True):
+            on_clip()
+            if audio is None:
+                continue
             if rng.random() < 0.5:
                 audio = add_noise(audio, noise)
             features = model.encode(audio)
@@ -227,7 +243,8 @@ def word_rows(word: dict, voices, model: Model, cache_dir: Path, on_clip) -> lis
                 else model.tokenizer.EncodeAsIds(clip["written"])
             )
             rows.append(row(features, tokens))
-            on_clip()
+    if not rows:
+        raise RuntimeError("The system voices couldn't produce any training speech")
     save_rows(path, rows)
     return rows
 
@@ -239,8 +256,8 @@ def example_cache(example: dict, cache_dir: Path) -> Path:
 
 def example_rows(example: dict, model: Model, cache_dir: Path) -> list[dict]:
     path = example_cache(example, cache_dir)
-    if path.exists():
-        return load_rows(path)
+    if (rows := cached_rows(path)) is not None:
+        return rows
     if not Path(example["audio"]).exists():
         return []
     audio, sr = sf.read(example["audio"], dtype="float32")
@@ -325,19 +342,20 @@ def head_weights(model) -> dict[str, mx.array]:
     }
 
 
-def train(model, rows: list[dict], on_step) -> dict[str, mx.array]:
+def train(model, rows: list[dict], on_progress) -> dict[str, mx.array]:
     for module in (model.decoder, model.joint):
         module.update(tree_map(lambda p: p.astype(mx.float32), module.parameters()))
     head = Head(model)
     optimizer = optim.AdamW(learning_rate=LEARNING_RATE, weight_decay=0.0)
     loss_and_grad = nn.value_and_grad(head, head)
     rng = random.Random(0)
-    for _ in range(EPOCHS):
-        for batch in batches(rows, rng):
-            loss, grads = loss_and_grad(*collate(batch))
-            optimizer.update(head, grads)
-            mx.eval(head.parameters(), optimizer.state, loss)
-            on_step()
+    epochs = [batches(rows, rng) for _ in range(EPOCHS)]
+    steps = sum(len(epoch) for epoch in epochs)
+    for step, batch in enumerate((batch for epoch in epochs for batch in epoch), 1):
+        loss, grads = loss_and_grad(*collate(batch))
+        optimizer.update(head, grads)
+        mx.eval(head.parameters(), optimizer.state, loss)
+        on_progress(step / steps)
     return {name: value.astype(mx.bfloat16) for name, value in head_weights(model).items()}
 
 
@@ -375,16 +393,8 @@ def run(job_path: Path, model, model_name: str) -> None:
     for example in job["examples"]:
         rows += example_rows(example, base, cache_dir) * EXAMPLE_WEIGHT
 
-    steps = EPOCHS * len(batches(rows, random.Random(0)))
     start = 0.6 if prepare_units else 0.0
-    step = 0
-
-    def on_step():
-        nonlocal step
-        step += 1
-        emit(progress=start + (1 - start) * step / steps)
-
-    weights = train(model, rows, on_step)
+    weights = train(model, rows, lambda done: emit(progress=start + (1 - start) * done))
     # A run the app stopped but that kept going must not overwrite a newer head
     if json.loads(job_path.read_text())["spec"] != job["spec"]:
         raise RuntimeError("Superseded by a newer training run")

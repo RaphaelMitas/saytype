@@ -87,6 +87,14 @@ pub fn vocab_dir() -> Result<PathBuf, String> {
     Ok(config::data_dir()?.join("vocab"))
 }
 
+/// E2E runs keep the base model, so their result doesn't depend on what this Mac learned
+pub fn serving_args() -> Result<Vec<std::ffi::OsString>, String> {
+    if e2e::is_enabled() {
+        return Ok(Vec::new());
+    }
+    Ok(vec!["--vocab-dir".into(), vocab_dir()?.into_os_string()])
+}
+
 fn examples_dir(vocab: &Path) -> PathBuf {
     vocab.join("examples")
 }
@@ -615,10 +623,21 @@ pub fn teach_from_history(
     let mut config = config::load_config();
     let mut added = 0;
     for word in &words {
-        if find_word(&config.words, word).is_none() {
-            let word = clean_word(word, &config.words)?;
-            config.words.push(Word { word, say_as: None });
-            added += 1;
+        match find_word(&config.words, word) {
+            // The example would teach the other spelling
+            Some(listed) if listed.word != collapse_whitespace(word) => {
+                return Err(format!(
+                    "{} is in your words as {}. Fix it with that spelling.",
+                    word.trim(),
+                    listed.word
+                ));
+            }
+            Some(_) => {}
+            None => {
+                let word = clean_word(word, &config.words)?;
+                config.words.push(Word { word, say_as: None });
+                added += 1;
+            }
         }
     }
 

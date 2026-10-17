@@ -111,6 +111,7 @@ function Row({
   onSaved: (message: string | null) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const tokens = draft?.tokens ?? tokenize(entry.text);
   const [start, end] = draft?.selection ?? [-1, -1];
   const selected = draft?.selection ? trimPunctuation(tokens.slice(start, end + 1).join("")) : null;
@@ -139,6 +140,7 @@ function Row({
 
   const save = async () => {
     if (!draft) return;
+    setSaving(true);
     try {
       const { example_saved } = await teachFromHistory(entry.id, draft.tokens.join(""), learned);
       onDraftChange(null);
@@ -149,6 +151,8 @@ function Row({
       );
     } catch (e) {
       setError(String(e));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -215,7 +219,7 @@ function Row({
               ? `Saves this line and teaches ${learned.join(", ")} with your recording. Fix every wrong word first.`
               : "Saves the corrected line. Nothing is added to your words."}
           </span>
-          <Button size="sm" onClick={save}>
+          <Button size="sm" disabled={saving} onClick={save}>
             Save
           </Button>
           <Button variant="ghost" size="sm" onClick={() => onDraftChange(null)}>
