@@ -333,14 +333,15 @@ export function WordsPage({ mode }: { mode: NetworkMode }) {
     getWords().then(setWords).catch(console.error);
   };
 
+  // Listening before the first fetch, so a run finishing in between isn't missed
+  useTauriEvent("words-changed", reload);
+  useTauriEvent<VocabStatus>("vocab-status", setStatus);
+
   useEffect(() => {
     if (client) return;
     getWords().then(setWords).catch(console.error);
     getVocabStatus().then(setStatus).catch(console.error);
   }, [client]);
-
-  useTauriEvent("words-changed", reload);
-  useTauriEvent<VocabStatus>("vocab-status", setStatus);
 
   const add = async (e: FormEvent) => {
     e.preventDefault();

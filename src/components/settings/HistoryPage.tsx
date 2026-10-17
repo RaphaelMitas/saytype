@@ -243,8 +243,8 @@ export function HistoryPage({ mode }: { mode: NetworkMode }) {
     getHistory().then(setHistory).catch(console.error);
   };
 
-  useEffect(reload, []);
   useTauriEvent("history-changed", reload);
+  useEffect(reload, []);
 
   const select = (entry: HistoryEntry, index: number, extend: boolean) => {
     setNotice(null);

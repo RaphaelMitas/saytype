@@ -112,6 +112,11 @@ class Model:
         features, _ = self.model.encoder(mel)
         return features
 
+    def unwritable(self, text: str) -> str:
+        """Characters the model has no token for; training on them would teach it to type <unk>."""
+        unk = self.tokenizer.unk_id()
+        return "".join(sorted({c for c in text if unk in self.tokenizer.EncodeAsIds(c)}))
+
     def own_transcript(self, features: mx.array) -> list[int]:
         hypothesis, _ = self.model.decode(features, mx.array([features.shape[1]]))
         return [token.id for token in hypothesis[0]]
@@ -265,6 +270,8 @@ def example_rows(example: dict, model: Model, cache_dir: Path) -> list[dict]:
         audio = audio.mean(axis=1)
     if sr != SAMPLE_RATE or len(audio) > MAX_EXAMPLE_SECONDS * SAMPLE_RATE:
         return []
+    if model.unwritable(example["text"]):
+        return []
     rows = [row(model.encode(audio), model.tokenizer.EncodeAsIds(example["text"]))]
     save_rows(path, rows)
     return rows
@@ -378,8 +385,14 @@ def run(job_path: Path, model, model_name: str) -> None:
     voices = installed_voices()
     base = Model(model, model_name)
 
-    missing = sum(not word_cache(word, voices, cache_dir).exists() for word in words)
-    prepare_units = missing * (CLIPS_PER_WORD + FILLER_CLIPS)
+    for word in words:
+        if chars := base.unwritable(word["word"]):
+            raise RuntimeError(
+                f"Saytype can't write {chars} in {word['word']}, remove it to continue"
+            )
+
+    cached = [cached_rows(word_cache(word, voices, cache_dir)) for word in words]
+    prepare_units = sum(hit is None for hit in cached) * (CLIPS_PER_WORD + FILLER_CLIPS)
     done = 0
 
     def on_clip():
@@ -388,8 +401,8 @@ def run(job_path: Path, model, model_name: str) -> None:
         emit(progress=0.6 * done / max(prepare_units, 1))
 
     rows = []
-    for word in words:
-        rows += word_rows(word, voices, base, cache_dir, on_clip)
+    for word, hit in zip(words, cached, strict=True):
+        rows += hit if hit is not None else word_rows(word, voices, base, cache_dir, on_clip)
     for example in job["examples"]:
         rows += example_rows(example, base, cache_dir) * EXAMPLE_WEIGHT
 
