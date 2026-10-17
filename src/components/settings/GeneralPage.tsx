@@ -1,11 +1,13 @@
 import { cn } from "cn";
-import { Check, Copy, Mic } from "lucide-react";
+import { Mic } from "lucide-react";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/settings/PageHeader";
+import { RowText } from "@/components/settings/RowText";
+import { Section } from "@/components/settings/Section";
+import { TranscriptBox } from "@/components/settings/TranscriptBox";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { useCopied } from "@/hooks/useCopied";
 import type { UseRecordingResult } from "@/hooks/useRecording";
 import type { SelfTest } from "@/hooks/useSelfTest";
 import { DEFAULT_PORT, type NetworkConfig } from "@/lib/network";
@@ -46,13 +48,12 @@ function PreviewSetting() {
   };
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="text-xs font-semibold text-muted-foreground">Live preview</div>
+    <Section label="Live preview">
       <SegmentedControl value={style} options={PREVIEW_STYLES} onChange={handleChange} />
       <p className="text-xs text-muted-foreground">
         {PREVIEW_STYLES.find((option) => option.value === style)?.hint}
       </p>
-    </div>
+    </Section>
   );
 }
 
@@ -74,7 +75,6 @@ export function GeneralPage({
   missingPermissions,
   onFixPermissions,
 }: GeneralPageProps) {
-  const { copied, copy } = useCopied();
   const serverOnly = network.mode === "server_only";
 
   const status = (() => {
@@ -123,10 +123,7 @@ export function GeneralPage({
       <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-3">
           <span className={cn("size-2 shrink-0 rounded-full", status.dot)} />
-          <div className="flex-1">
-            <div className="text-sm font-semibold">{status.label}</div>
-            <div className="text-xs text-muted-foreground">{detail}</div>
-          </div>
+          <RowText title={status.label} description={detail} />
           {!serverOnly && (
             <>
               <Button
@@ -156,15 +153,10 @@ export function GeneralPage({
 
       {missingPermissions.length > 0 && (
         <div className="flex items-center gap-3 rounded-xl border border-destructive/40 bg-card p-4">
-          <div className="flex-1">
-            <div className="text-sm font-semibold">
-              {joinNames(missingPermissions)} {missingPermissions.length > 1 ? "are" : "is"} off
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Saytype can't record or paste until{" "}
-              {missingPermissions.length > 1 ? "they're" : "it's"} on.
-            </div>
-          </div>
+          <RowText
+            title={`${joinNames(missingPermissions)} ${missingPermissions.length > 1 ? "are" : "is"} off`}
+            description={`Saytype can't record or paste until ${missingPermissions.length > 1 ? "they're" : "it's"} on.`}
+          />
           <Button size="sm" onClick={onFixPermissions}>
             Fix
           </Button>
@@ -174,21 +166,15 @@ export function GeneralPage({
       {!serverOnly && <PreviewSetting />}
 
       {lastTranscription && (
-        <div className="flex flex-col gap-1.5">
-          <div className="text-xs font-semibold text-muted-foreground">Last transcription</div>
-          <div className="flex items-start gap-2 rounded-lg bg-muted py-2 pr-2 pl-3 text-sm select-text">
-            <span className="flex-1 py-0.5">{lastTranscription}</span>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label="Copy"
-              className="text-muted-foreground"
-              onClick={() => copy(lastTranscription)}
-            >
-              {copied ? <Check /> : <Copy />}
-            </Button>
-          </div>
-        </div>
+        <TranscriptBox label="Last transcription" text={lastTranscription.text} />
+      )}
+      {lastTranscription && lastTranscription.raw !== lastTranscription.text && (
+        <TranscriptBox label="Before post-processing" text={lastTranscription.raw} />
+      )}
+      {lastTranscription?.error && (
+        <p className="text-xs text-muted-foreground">
+          Post-processing failed, so the raw transcript was pasted: {lastTranscription.error}
+        </p>
       )}
     </>
   );

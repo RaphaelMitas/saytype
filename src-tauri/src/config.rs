@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 /// Modifier key enum for hotkey configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -123,6 +124,8 @@ pub struct AppConfig {
     pub server_port: Option<u16>,
     #[serde(default)]
     pub preview: PreviewStyle,
+    #[serde(default)]
+    pub post_processing: crate::post_processing::Settings,
 }
 
 fn default_server_port() -> Option<u16> {
@@ -177,9 +180,10 @@ pub fn load_config() -> AppConfig {
     crate::e2e::apply_mode_override(AppConfig::default())
 }
 
-/// Save configuration to disk
-pub fn save_config(config: &AppConfig) -> Result<(), String> {
+fn save_config(config: &AppConfig) -> Result<(), String> {
     let path = config_path()?;
+    // Resolved, so the rename below updates a symlink's target instead of replacing the link
+    let path = fs::canonicalize(&path).unwrap_or(path);
 
     // Create parent directory if needed
     if let Some(parent) = path.parent() {
@@ -190,10 +194,24 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
     let json = serde_json::to_string_pretty(config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-    fs::write(&path, json).map_err(|e| format!("Failed to write config: {}", e))?;
+    // Renamed into place, so a concurrent load never reads a half-written file
+    let temp = path.with_extension("json.tmp");
+    fs::write(&temp, json).map_err(|e| format!("Failed to write config: {}", e))?;
+    if let Ok(meta) = fs::metadata(&path) {
+        let _ = fs::set_permissions(&temp, meta.permissions());
+    }
+    fs::rename(&temp, &path).map_err(|e| format!("Failed to write config: {}", e))?;
 
     println!("[CONFIG] Saved config to {:?}", path);
     Ok(())
+}
+
+pub fn update(change: impl FnOnce(&mut AppConfig)) -> Result<(), String> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut config = load_config();
+    change(&mut config);
+    save_config(&config)
 }
 
 /// Map JavaScript event.code to platform keycode

@@ -1,6 +1,7 @@
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { Permissions, Platform } from "@/hooks/usePermissions";
 import { DEFAULT_PORT, type NetworkConfig } from "@/lib/network";
+import type { PostProcessing } from "@/lib/postProcessing";
 
 mockWindows("settings");
 
@@ -25,6 +26,17 @@ mockIPC(
         return { label: "Right ⌘" };
       case "get_sidecar_ready":
         return true;
+      case "get_post_processing":
+        return {
+          enabled: true,
+          availability: "available",
+          selected_id: "clean_up",
+          prompts: [
+            { id: "clean_up", name: "Clean up", text: "", builtin: true, edited: false },
+            { id: "custom_1", name: "Commit message", text: "", builtin: false, edited: false },
+          ],
+          timeout_secs: 8,
+        } satisfies PostProcessing;
     }
   },
   { shouldMockEvents: true },

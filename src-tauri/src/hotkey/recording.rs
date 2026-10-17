@@ -2,9 +2,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, Manager};
 
 use crate::preview::{self, Outcome};
-use crate::{audio, text_insertion, transcriber, AppState};
+use crate::{audio, post_processing, text_insertion, transcriber, AppState};
 
 static HOTKEY_ACTIVE: AtomicBool = AtomicBool::new(false);
+// Rewrites take different times, so without this a short dictation can paste before a long one
+static IN_ORDER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 pub(super) fn set_hotkey_held(app_handle: &tauri::AppHandle, held: bool) {
     if HOTKEY_ACTIVE.swap(held, Ordering::SeqCst) != held {
@@ -98,17 +100,26 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
             Ok(text) => {
                 println!("[DEBUG] Transcription result: '{}'", text);
                 if !text.is_empty() {
-                    // Before the paste starts, so a fast failure always lands after it
+                    let _in_order = IN_ORDER.lock().await;
+                    let raw = text;
+                    let (text, error) = match post_processing::apply(&raw).await {
+                        Ok(text) => (text, None),
+                        Err(e) => (raw.clone(), Some(e)),
+                    };
                     preview::finish(&handle, preview_session, Outcome::Pasted(text.clone()));
+                    let _ = handle.emit(
+                        "transcription-complete",
+                        serde_json::json!({ "text": text, "raw": raw, "error": error }),
+                    );
                     let paste_handle = handle.clone();
-                    let paste_text = text.clone();
-                    std::thread::spawn(move || {
-                        if let Err(e) = text_insertion::insert_text(&paste_handle, &paste_text) {
-                            eprintln!("[DEBUG] Failed to insert text: {}", e);
-                            preview::finish(&paste_handle, preview_session, Outcome::Failed(e));
-                        }
-                    });
-                    let _ = handle.emit("transcription-complete", text);
+                    let pasted = tauri::async_runtime::spawn_blocking(move || {
+                        text_insertion::insert_text(&paste_handle, &text)
+                    })
+                    .await;
+                    if let Ok(Err(e)) = pasted {
+                        eprintln!("[DEBUG] Failed to insert text: {}", e);
+                        preview::finish(&handle, preview_session, Outcome::Failed(e));
+                    }
                 } else {
                     println!("[DEBUG] Transcription was empty");
                     preview::finish(&handle, preview_session, Outcome::Empty);

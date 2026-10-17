@@ -4,6 +4,7 @@ mod audio;
 mod config;
 mod e2e;
 mod hotkey;
+mod post_processing;
 mod preview;
 mod remote;
 mod sidecar;
@@ -236,9 +237,7 @@ async fn set_hotkey(
     hotkey::clear_held_keys(&app_handle);
 
     // Save to config file
-    let mut app_config = config::load_config();
-    app_config.hotkey = new_hotkey.clone();
-    config::save_config(&app_config)?;
+    config::update(|config| config.hotkey = new_hotkey.clone())?;
 
     println!("[HOTKEY] Updated hotkey to: {}", new_hotkey.label);
 
@@ -315,11 +314,11 @@ async fn set_network_config(
     server_url: Option<String>,
     server_port: Option<u16>,
 ) -> Result<(), String> {
-    let mut config = config::load_config();
-    config.mode = mode;
-    config.server_url = server_url;
-    config.server_port = server_port;
-    config::save_config(&config)
+    config::update(|config| {
+        config.mode = mode;
+        config.server_url = server_url;
+        config.server_port = server_port;
+    })
 }
 
 #[tauri::command]
@@ -329,9 +328,7 @@ async fn get_preview_style() -> config::PreviewStyle {
 
 #[tauri::command]
 async fn set_preview_style(style: config::PreviewStyle) -> Result<(), String> {
-    let mut config = config::load_config();
-    config.preview = style;
-    config::save_config(&config)
+    config::update(|config| config.preview = style)
 }
 
 #[tauri::command]
@@ -470,6 +467,12 @@ pub fn run() {
             restart_app,
             get_local_ip,
             get_platform,
+            post_processing::get_post_processing,
+            post_processing::set_post_processing_enabled,
+            post_processing::select_post_processing_prompt,
+            post_processing::save_post_processing_prompt,
+            post_processing::delete_post_processing_prompt,
+            post_processing::test_post_processing,
             get_update_status,
             check_for_updates,
             install_update,
