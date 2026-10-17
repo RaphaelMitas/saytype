@@ -3,8 +3,8 @@
 //!
 //! Training runs the sidecar binary with `--train` as its own process, so dictation keeps
 //! working meanwhile. It writes vocab/head.safetensors, which the serving sidecar swaps in before
-//! its next transcription. head.json records what that head was trained on; whenever the words,
-//! examples or app version differ from it, the head is out of date and a new run gets scheduled.
+//! its next transcription. head.json records what that head was trained on; whenever the words
+//! or examples differ from it, the head is out of date and a new run gets scheduled.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -128,11 +128,9 @@ fn known_example(vocab: &Path, id: &str) -> Result<PathBuf, String> {
     }
 }
 
-/// Everything a head depends on. The app version is in it because a new sidecar may train
-/// differently, and retraining after an update takes seconds.
+/// Everything a head depends on. Updates keep the head, so add a field here when one should not.
 fn spec(words: &[Word], examples: &[Example]) -> Value {
     json!({
-        "version": env!("CARGO_PKG_VERSION"),
         "words": words,
         "examples": examples
             .iter()
@@ -784,10 +782,7 @@ mod tests {
         assert!(needs_training(&vocab, &words));
 
         // As Python's json.dumps writes it: its own key order, say_as as null
-        let meta = format!(
-            r#"{{"trained_at": 1.5, "spec": {{"words": [{{"say_as": null, "word": "Flatsby"}}], "examples": [], "version": "{}"}}}}"#,
-            env!("CARGO_PKG_VERSION")
-        );
+        let meta = r#"{"trained_at": 1.5, "spec": {"words": [{"say_as": null, "word": "Flatsby"}], "examples": []}}"#;
         std::fs::write(head_meta(&vocab), meta).unwrap();
 
         assert!(!needs_training(&vocab, &words));
