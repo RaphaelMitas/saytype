@@ -58,21 +58,18 @@ The app runs entirely offline. On first launch, wait for the ML model to load (i
 - [Rust](https://rustup.rs/)
 - [Node.js](https://nodejs.org/) 20+
 - [pnpm](https://pnpm.io/)
-- Python 3.10+
+- Python 3.14 (`brew install python@3.14`)
 
 ### Build
 
 ```bash
-# Build the ML sidecar (required before first run)
-cd sidecar && ./build.sh && cd ..
-
 # Install dependencies
 pnpm install
 
-# Development (hot reload)
+# Development (hot reload, builds the ML sidecar on first run)
 pnpm tauri dev
 
-# Production build
+# Production build (needs the sidecar from a dev run or sidecar/build.sh)
 pnpm tauri build
 ```
 
