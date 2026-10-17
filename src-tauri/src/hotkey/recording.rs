@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, Manager};
 
 use crate::preview::{self, Outcome};
-use crate::{audio, post_processing, text_insertion, transcriber, AppState};
+use crate::{audio, history, post_processing, text_insertion, transcriber, vocab, AppState};
 
 static HOTKEY_ACTIVE: AtomicBool = AtomicBool::new(false);
 // Rewrites take different times, so without this a short dictation can paste before a long one
@@ -44,6 +44,11 @@ fn on_hotkey_pressed(app_handle: &tauri::AppHandle) {
         if !HOTKEY_ACTIVE.load(Ordering::SeqCst) {
             return;
         }
+        // Checked under the lock, which start_example_recording also holds while it starts
+        if vocab::is_recording_example() {
+            audio::play_busy_sound();
+            return;
+        }
 
         audio::play_start_sound();
 
@@ -70,10 +75,12 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
         // Held until the recorder stops, so a quick second press can't start in between
         let mut is_recording = state.is_recording.lock().await;
         let was_recording = std::mem::replace(&mut *is_recording, false);
-        // A refused press never started recording; its busy sound already played.
-        if was_recording {
-            audio::play_stop_sound();
+        // A refused press never started recording, and its busy sound already played. Stopping
+        // anyway would cut off an example the Words page is recording.
+        if !was_recording {
+            return;
         }
+        audio::play_stop_sound();
 
         let preview_session = preview::stop(&handle);
 
@@ -120,6 +127,8 @@ fn on_hotkey_released(app_handle: &tauri::AppHandle) {
                         eprintln!("[DEBUG] Failed to insert text: {}", e);
                         preview::finish(&handle, preview_session, Outcome::Failed(e));
                     }
+                    // Raw, because a rewritten line no longer matches the recording History teaches from
+                    history::keep(&handle, std::path::Path::new(&audio_path), &raw);
                 } else {
                     println!("[DEBUG] Transcription was empty");
                     preview::finish(&handle, preview_session, Outcome::Empty);

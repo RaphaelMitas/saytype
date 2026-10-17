@@ -11,6 +11,9 @@ Usage:
 
     # Direct transcription mode
     ./transcribe_server.py --transcribe /path/to/audio.wav
+
+    # Learn the user's words, writing a head the serving modes pick up via --vocab-dir
+    ./transcribe_server.py --train /path/to/job.json
 """
 
 import argparse
@@ -20,11 +23,49 @@ from pathlib import Path
 
 import mlx.core as mx
 import soundfile as sf
+import vocab_trainer
+from mlx.utils import tree_unflatten
 from parakeet_mlx.audio import get_logmel
 
 # Global model cache
 _model = None
 _model_name = None
+
+
+class VocabHead:
+    """Keeps the model's decoder and joint in step with the trained head file on disk."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self.base = None
+        self.loaded = None
+
+    def sync(self, model) -> None:
+        try:
+            stat = self.path.stat()
+            version = (stat.st_mtime_ns, stat.st_size)
+        except FileNotFoundError:
+            version = None
+        if version == self.loaded:
+            return
+        if self.base is None:
+            self.base = vocab_trainer.head_weights(model)
+        weights = self.base
+        if version is not None:
+            try:
+                weights = mx.load(str(self.path))
+            except Exception as e:
+                sys.stderr.write(f"[VOCAB] Ignoring unreadable head {self.path}: {e}\n")
+            if not isinstance(weights, dict) or set(weights) - set(self.base):
+                sys.stderr.write(f"[VOCAB] Ignoring head with unexpected weights: {self.path}\n")
+                weights = self.base
+        model.update(tree_unflatten(list(weights.items())))
+        self.loaded = version
+        if weights is not self.base:
+            sys.stderr.write(f"[VOCAB] Applied head {self.path}\n")
+
+
+_vocab_head: VocabHead | None = None
 
 
 def load_model(model_name: str):
@@ -39,6 +80,11 @@ def load_model(model_name: str):
 
         _model = from_pretrained(model_name)
         _model_name = model_name
+        # from_pretrained skips the tokenizer, and training needs it cached for when it runs offline
+        try:
+            vocab_trainer.tokenizer_path(model_name)
+        except Exception as e:
+            sys.stderr.write(f"[VOCAB] Couldn't fetch tokenizer.model: {e}\n")
         return _model
     except ImportError as e:
         print(
@@ -106,6 +152,9 @@ def transcribe_audio(audio_path: str, model_name: str) -> dict:
 
         # Convert to mlx array (matching load_audio output format)
         audio_mx = mx.array(audio_data.astype("float32"))
+
+        if _vocab_head is not None:
+            _vocab_head.sync(model)
 
         # Get mel spectrogram
         mel = get_logmel(audio_mx, model.preprocessor_config)
@@ -260,6 +309,7 @@ def http_server_mode(model_name: str, host: str, port: int):
 
 
 def main():
+    global _vocab_head
     parser = argparse.ArgumentParser(description="Saytype Transcription Server")
     parser.add_argument("--transcribe", type=str, help="Transcribe a single audio file and exit")
     parser.add_argument(
@@ -278,11 +328,27 @@ def main():
         help="HTTP server bind address (default: ::, IPv6 and IPv4)",
     )
     parser.add_argument("--port", type=int, default=8765, help="HTTP server port (default: 8765)")
+    parser.add_argument(
+        "--vocab-dir", type=Path, help="Apply the trained head in this directory, if there is one"
+    )
+    parser.add_argument(
+        "--train", type=Path, help="Train a head for the word list in this job file"
+    )
     args = parser.parse_args()
 
     model_name = args.model
 
-    if args.transcribe:
+    if args.vocab_dir:
+        _vocab_head = VocabHead(args.vocab_dir / "head.safetensors")
+
+    if args.train:
+        try:
+            vocab_trainer.run(args.train, load_model(model_name), model_name)
+        except Exception as e:
+            vocab_trainer.emit(success=False, error=str(e))
+            sys.exit(1)
+        vocab_trainer.emit(success=True)
+    elif args.transcribe:
         # Direct transcription mode
         result = transcribe_audio(args.transcribe, model_name)
         print(json.dumps(result), flush=True)

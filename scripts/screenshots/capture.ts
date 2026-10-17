@@ -9,7 +9,7 @@ if (!outDir) {
   process.exit(1);
 }
 
-const PAGES = ["General", "Hotkey", "Post-processing", "Mode", "Permissions"];
+const PAGES = ["General", "Hotkey", "Words", "History", "Post-processing", "Mode", "Permissions"];
 const SCHEMES = ["dark", "light"] as const;
 
 await mkdir(outDir, { recursive: true });

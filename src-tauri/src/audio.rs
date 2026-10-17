@@ -33,10 +33,7 @@ impl PushToTalkRecorder {
 
     pub fn start(&mut self) -> Result<(), String> {
         // Generate unique output path
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
+        let timestamp = crate::storage::now_millis();
         self.output_path = std::env::temp_dir()
             .join(format!(
                 "saytype_ptt_{}_{}.wav",
@@ -249,6 +246,11 @@ fn resample_audio(samples: &[f32], source_rate: u32, target_rate: u32) -> Result
     Ok(output)
 }
 
+pub fn wav_seconds(path: &std::path::Path) -> Option<f32> {
+    let reader = hound::WavReader::open(path).ok()?;
+    Some(reader.duration() as f32 / reader.spec().sample_rate as f32)
+}
+
 /// Write samples to a WAV file
 fn write_wav_file(path: &str, samples: &[f32], sample_rate: u32) -> Result<(), String> {
     let spec = WavSpec {
@@ -398,6 +400,40 @@ fn ask_for_microphone() -> tokio::sync::mpsc::UnboundedReceiver<()> {
         unsafe { AVCaptureDevice::requestAccessForMediaType_completionHandler(audio, &answered) };
     }
     rx
+}
+
+#[cfg(target_os = "macos")]
+static PLAYBACK: StdMutex<Option<std::process::Child>> = StdMutex::new(None);
+
+/// One sound at a time: a new clip or word cuts off the one still playing
+fn play(command: &mut std::process::Command) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut playback = PLAYBACK.lock().map_err(|e| e.to_string())?;
+        if let Some(mut previous) = playback.take() {
+            let _ = previous.kill();
+            let _ = previous.wait();
+        }
+        *playback = Some(
+            command
+                .spawn()
+                .map_err(|e| format!("Failed to play: {e}"))?,
+        );
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = command;
+        Err("Playback is only available on macOS".to_string())
+    }
+}
+
+pub fn play_file(path: &std::path::Path) -> Result<(), String> {
+    play(std::process::Command::new("afplay").arg(path))
+}
+
+pub fn speak(text: &str) -> Result<(), String> {
+    play(std::process::Command::new("say").arg("--").arg(text))
 }
 
 /// Play a sound when recording starts

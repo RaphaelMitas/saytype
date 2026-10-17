@@ -83,6 +83,7 @@ pub async fn initialize(app_handle: &tauri::AppHandle) -> Result<(), String> {
 
             let mut child = std::process::Command::new(&program)
                 .args(["--http", "--host", "::", "--port", &port.to_string()])
+                .args(crate::vocab::serving_args()?)
                 .stdin(Stdio::null())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::inherit())

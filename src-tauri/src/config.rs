@@ -126,29 +126,42 @@ pub struct AppConfig {
     pub preview: PreviewStyle,
     #[serde(default)]
     pub post_processing: crate::post_processing::Settings,
+    #[serde(default)]
+    pub words: Vec<Word>,
+    /// Negative so configs from before History existed, and fresh installs, keep it on
+    #[serde(default)]
+    pub history_off: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Word {
+    pub word: String,
+    #[serde(default)]
+    pub say_as: Option<String>,
 }
 
 fn default_server_port() -> Option<u16> {
     Some(8765)
 }
 
-/// Get the config file path
-fn config_path() -> Result<PathBuf, String> {
+pub fn data_dir() -> Result<PathBuf, String> {
     #[cfg(target_os = "windows")]
     {
         let appdata = std::env::var("APPDATA").map_err(|_| "APPDATA not set")?;
-        let config_dir = PathBuf::from(appdata).join("saytype");
-        Ok(config_dir.join("config.json"))
+        Ok(PathBuf::from(appdata).join("saytype"))
     }
     #[cfg(not(target_os = "windows"))]
     {
         let home = std::env::var("HOME").map_err(|_| "HOME not set")?;
-        let config_dir = PathBuf::from(home)
+        Ok(PathBuf::from(home)
             .join("Library")
             .join("Application Support")
-            .join("com.raphaelmitas.saytype");
-        Ok(config_dir.join("config.json"))
+            .join("com.raphaelmitas.saytype"))
     }
+}
+
+fn config_path() -> Result<PathBuf, String> {
+    Ok(data_dir()?.join("config.json"))
 }
 
 /// Load configuration from disk
@@ -182,36 +195,28 @@ pub fn load_config() -> AppConfig {
 
 fn save_config(config: &AppConfig) -> Result<(), String> {
     let path = config_path()?;
-    // Resolved, so the rename below updates a symlink's target instead of replacing the link
-    let path = fs::canonicalize(&path).unwrap_or(path);
-
-    // Create parent directory if needed
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create config directory: {}", e))?;
-    }
-
-    let json = serde_json::to_string_pretty(config)
-        .map_err(|e| format!("Failed to serialize config: {}", e))?;
-
-    // Renamed into place, so a concurrent load never reads a half-written file
-    let temp = path.with_extension("json.tmp");
-    fs::write(&temp, json).map_err(|e| format!("Failed to write config: {}", e))?;
-    if let Ok(meta) = fs::metadata(&path) {
-        let _ = fs::set_permissions(&temp, meta.permissions());
-    }
-    fs::rename(&temp, &path).map_err(|e| format!("Failed to write config: {}", e))?;
-
+    crate::storage::write_json(&path, config)?;
     println!("[CONFIG] Saved config to {:?}", path);
     Ok(())
 }
 
 pub fn update(change: impl FnOnce(&mut AppConfig)) -> Result<(), String> {
+    try_update(|config| {
+        change(config);
+        Ok(())
+    })
+}
+
+/// Saves nothing when `change` fails
+pub fn try_update<T>(
+    change: impl FnOnce(&mut AppConfig) -> Result<T, String>,
+) -> Result<T, String> {
     static LOCK: Mutex<()> = Mutex::new(());
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut config = load_config();
-    change(&mut config);
-    save_config(&config)
+    let result = change(&mut config)?;
+    save_config(&config)?;
+    Ok(result)
 }
 
 /// Map JavaScript event.code to platform keycode

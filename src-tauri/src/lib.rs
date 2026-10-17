@@ -3,18 +3,21 @@ mod app_nap;
 mod audio;
 mod config;
 mod e2e;
+mod history;
 mod hotkey;
 mod post_processing;
 mod preview;
 mod remote;
 mod sidecar;
+mod storage;
 mod text_insertion;
 mod transcriber;
 mod tray;
 mod updater;
+mod vocab;
 
 use std::sync::Arc;
-use tauri::{Emitter, RunEvent, WindowEvent};
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 use tokio::sync::Mutex;
 
 pub use config::HotkeyConfig;
@@ -433,6 +436,8 @@ pub fn run() {
                         e2e::finish(1);
                     }
                 }
+                // After the sidecar, so the two model loads don't compete at launch
+                vocab::train_if_needed(&handle_clone);
 
                 if let Some(audio_path) = e2e_audio {
                     e2e::run(&handle_clone, &audio_path).await;
@@ -446,6 +451,7 @@ pub fn run() {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 window.hide().unwrap();
                 api.prevent_close();
+                vocab::settings_closed(window.app_handle());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -476,11 +482,30 @@ pub fn run() {
             get_update_status,
             check_for_updates,
             install_update,
+            vocab::get_words,
+            vocab::get_vocab_status,
+            vocab::add_word,
+            vocab::remove_word,
+            vocab::set_say_as,
+            vocab::speak_word,
+            vocab::start_example_recording,
+            vocab::finish_example_recording,
+            vocab::cancel_example_recording,
+            vocab::delete_example,
+            vocab::play_example,
+            vocab::teach_from_history,
+            vocab::retry_training,
+            history::get_history,
+            history::set_keep_history,
+            history::delete_history_entry,
+            history::clear_history,
+            history::play_history_entry,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_, event| {
             if let RunEvent::Exit = event {
+                vocab::shutdown();
                 let _ = updater::install_pending();
             }
         });

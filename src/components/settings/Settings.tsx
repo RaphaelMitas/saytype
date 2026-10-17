@@ -1,5 +1,7 @@
 import { cn } from "cn";
 import {
+  BookA,
+  ClockFading,
   Globe,
   House,
   Info,
@@ -13,10 +15,12 @@ import { useState } from "react";
 import { PermissionList } from "@/components/PermissionList";
 import { AboutPage } from "@/components/settings/AboutPage";
 import { GeneralPage } from "@/components/settings/GeneralPage";
+import { HistoryPage } from "@/components/settings/HistoryPage";
 import { HotkeyPage } from "@/components/settings/HotkeyPage";
 import { ModePage } from "@/components/settings/ModePage";
 import { PageHeader } from "@/components/settings/PageHeader";
 import { PostProcessingPage } from "@/components/settings/PostProcessingPage";
+import { WordsPage } from "@/components/settings/WordsPage";
 import { Button } from "@/components/ui/button";
 import { missingPermissions, type Platform, usePermissions } from "@/hooks/usePermissions";
 import { useRecording } from "@/hooks/useRecording";
@@ -25,7 +29,15 @@ import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { installUpdate, useUpdateStatus } from "@/hooks/useUpdateStatus";
 import type { NetworkConfig } from "@/lib/network";
 
-type Page = "general" | "hotkey" | "post_processing" | "mode" | "permissions" | "about";
+type Page =
+  | "general"
+  | "hotkey"
+  | "words"
+  | "history"
+  | "post_processing"
+  | "mode"
+  | "permissions"
+  | "about";
 
 interface NavItem {
   page: Page;
@@ -38,6 +50,8 @@ interface NavItem {
 const NAV: NavItem[] = [
   { page: "general", label: "General", icon: House },
   { page: "hotkey", label: "Hotkey", icon: Keyboard, hiddenInServerMode: true },
+  { page: "words", label: "Words", icon: BookA },
+  { page: "history", label: "History", icon: ClockFading, hiddenInServerMode: true },
   {
     page: "post_processing",
     label: "Post-processing",
@@ -116,6 +130,8 @@ export function Settings({ platform, runningNetwork, hotkey, onHotkeyChange }: S
         {page === "hotkey" && (
           <HotkeyPage platform={platform} hotkey={hotkey} onChange={onHotkeyChange} />
         )}
+        {page === "words" && <WordsPage mode={runningNetwork.mode} />}
+        {page === "history" && <HistoryPage mode={runningNetwork.mode} />}
         {page === "post_processing" && <PostProcessingPage />}
         {page === "mode" && (
           <ModePage

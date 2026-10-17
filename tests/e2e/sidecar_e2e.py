@@ -2,11 +2,13 @@
 """
 End-to-end test for the frozen transcription sidecar binary.
 
-Exercises the binary in all three modes the Tauri app relies on:
+Exercises the binary in all the modes the Tauri app relies on:
 
     1. --transcribe        one-shot CLI transcription
     2. stdin/stdout IPC    the protocol sidecar.rs speaks
     3. --http              the protocol remote.rs / transcriber.rs speak
+    4. --train             custom-word training, as vocab.rs runs it, then
+                           IPC with --vocab-dir picking up the trained head
 
 The point of running the *frozen* binary rather than transcribe_server.py is
 that PyInstaller bundling breaks silently (missing hidden imports, missing MLX
@@ -24,6 +26,7 @@ import re
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -42,6 +45,7 @@ DEFAULT_EXPECT = "The quick brown fox jumps over the lazy dog."
 # with a very unhelpful message.
 READY_TIMEOUT = 900.0
 TRANSCRIBE_TIMEOUT = 180.0
+TRAIN_TIMEOUT = 900.0
 
 
 class TestFailure(Exception):
@@ -262,6 +266,76 @@ def test_http_mode(binary: Path, fixture: Path, expected: str) -> None:
         terminate(proc)
 
 
+def test_train_mode(binary: Path, fixture: Path, expected: str) -> None:
+    """Mode 4: --train writes a head, and a serving sidecar swaps it in before transcribing."""
+    print("\n=== Mode 4: --train, then IPC with --vocab-dir ===")
+    with tempfile.TemporaryDirectory() as tmp:
+        vocab = Path(tmp)
+        job = vocab / "job.json"
+        # The fixture stays held out, so the check below catches a head that hurts dictation
+        example_text = "I use Saytype every day."
+        example = vocab / "example.wav"
+        subprocess.run(
+            ["say", "-o", str(example), "--data-format=LEI16@16000", "--", example_text],
+            check=True,
+        )
+        spec = {"words": [{"word": "Saytype", "say_as": None}]}
+        job.write_text(
+            json.dumps(
+                {
+                    "words": spec["words"],
+                    "examples": [{"id": "example", "audio": str(example), "text": example_text}],
+                    "cache_dir": str(vocab / "cache"),
+                    "head_path": str(vocab / "head.safetensors"),
+                    "meta_path": str(vocab / "head.json"),
+                    "spec": spec,
+                }
+            )
+        )
+        proc = subprocess.run(
+            [str(binary), "--train", str(job)],
+            capture_output=True,
+            text=True,
+            timeout=TRAIN_TIMEOUT,
+            check=False,
+        )
+        lines = [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
+        if proc.returncode != 0 or not lines or lines[-1].get("success") is not True:
+            raise TestFailure(f"--train failed: {lines[-1:] or proc.stdout!r}\n{proc.stderr}")
+        if not any("progress" in line for line in lines):
+            raise TestFailure("--train reported no progress")
+        meta = json.loads((vocab / "head.json").read_text())
+        if meta.get("spec") != spec or not (vocab / "head.safetensors").exists():
+            raise TestFailure(f"--train wrote an unexpected head: {meta}")
+        print(f"  trained, {len(lines)} progress lines")
+
+        serve = subprocess.Popen(
+            [str(binary), "--vocab-dir", str(vocab)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+        try:
+            stdout = LineReader(serve.stdout, "stdout")
+            stderr = LineReader(serve.stderr, "stderr")
+            assert serve.stdin is not None
+            stdout.wait_for('"ready"', READY_TIMEOUT)
+            serve.stdin.write(
+                json.dumps({"command": "transcribe", "audio_path": str(fixture)}) + "\n"
+            )
+            serve.stdin.flush()
+            # A head that can't be loaded falls back to the base model, which transcribes fine
+            stderr.wait_for("[VOCAB] Applied head", TRANSCRIBE_TIMEOUT)
+            result = next_json(stdout, TRANSCRIBE_TIMEOUT)
+            if not result.get("success"):
+                raise TestFailure(f"transcribe with trained head failed: {result.get('error')}")
+            assert_transcript(result.get("text", ""), expected, "IPC with trained head")
+        finally:
+            terminate(serve)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("binary", type=Path, help="Path to the frozen sidecar binary")
@@ -280,7 +354,7 @@ def main() -> int:
     print(f"Fixture: {args.fixture}")
     print(f"Expect:  {args.expect!r}")
 
-    tests = [test_cli_mode, test_ipc_mode, test_http_mode]
+    tests = [test_cli_mode, test_ipc_mode, test_http_mode, test_train_mode]
     failures: list[str] = []
     for test in tests:
         started = time.monotonic()
