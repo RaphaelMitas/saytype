@@ -329,6 +329,8 @@ fn start(app_handle: &tauri::AppHandle, trainer: &mut Trainer, vocab: &Path) -> 
     if words.is_empty() {
         let _ = std::fs::remove_file(&head);
         let _ = std::fs::remove_file(head_meta(vocab));
+        // No run will prune it, and it holds features of the user's recordings
+        let _ = std::fs::remove_dir_all(vocab.join("cache"));
         set_status(app_handle, trainer, Status::Idle);
         return Ok(());
     }

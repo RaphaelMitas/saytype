@@ -44,46 +44,35 @@ FILLER_CLIPS = 4
 GERMAN_FRACTION = 0.2
 EPOCHS = 3
 BATCH = 4
+# Peak memory grows with clips × frames × tokens; 12k of those stays around 3 GB
+MAX_BATCH_CELLS = 12_000
 LEARNING_RATE = 1e-4
 EXAMPLE_WEIGHT = 4
 MAX_EXAMPLE_SECONDS = 15
 RATES = [150, 170, 185, 200, 220]
 SAMPLE_RATE = 16000
 
-# Preinstalled voices that sound like people; the novelty voices (Bells, Zarvox…) are left out
-VOICES = {
-    "en": [
-        "Samantha",
-        "Daniel",
-        "Karen",
-        "Moira",
-        "Tessa",
-        "Rishi",
-        "Aman",
-        "Tara",
-        "Eddy (English (US))",
-        "Eddy (English (UK))",
-        "Flo (English (US))",
-        "Flo (English (UK))",
-        "Grandma (English (US))",
-        "Grandpa (English (UK))",
-        "Reed (English (US))",
-        "Reed (English (UK))",
-        "Rocko (English (US))",
-        "Sandy (English (UK))",
-        "Shelley (English (US))",
-        "Shelley (English (UK))",
-    ],
-    "de": [
-        "Anna (German (Germany))",
-        "Eddy (German (Germany))",
-        "Flo (German (Germany))",
-        "Grandpa (German (Germany))",
-        "Reed (German (Germany))",
-        "Rocko (German (Germany))",
-        "Sandy (German (Germany))",
-        "Shelley (German (Germany))",
-    ],
+# Novelty and old robotic voices; every other installed English or German voice is used
+NOT_HUMAN = {
+    "Albert",
+    "Bad News",
+    "Bahh",
+    "Bells",
+    "Boing",
+    "Bubbles",
+    "Cellos",
+    "Fred",
+    "Good News",
+    "Jester",
+    "Junior",
+    "Kathy",
+    "Organ",
+    "Ralph",
+    "Superstar",
+    "Trinoids",
+    "Whisper",
+    "Wobble",
+    "Zarvox",
 }
 TEMPLATES = {"en": EN, "de": DE}
 FILLERS = {"en": FILLERS_EN, "de": FILLERS_DE}
@@ -94,16 +83,16 @@ def emit(**message) -> None:
 
 
 def installed_voices() -> dict[str, list[str]]:
+    """Listed as "Samantha (English (US))  en_US" or "Karen  en_AU", depending on macOS version."""
     listing = subprocess.run(["say", "-v", "?"], capture_output=True, text=True, check=True)
-    names = {
-        match.group(1)
-        for line in listing.stdout.splitlines()
-        if (match := re.match(r"^(.+?)\s+[a-z]{2}_[A-Z]{2}\b", line))
-    }
-    voices = {lang: [v for v in wanted if v in names] for lang, wanted in VOICES.items()}
+    voices: dict[str, set[str]] = {"en": set(), "de": set()}
+    for line in listing.stdout.splitlines():
+        match = re.match(r"^(.+?)\s+([a-z]{2})_[A-Z]{2}\b", line)
+        if match and match.group(2) in voices and match.group(1).split(" (")[0] not in NOT_HUMAN:
+            voices[match.group(2)].add(match.group(1))
     if not voices["en"]:
         raise RuntimeError("No English system voices installed to generate training speech")
-    return voices
+    return {lang: sorted(names) for lang, names in voices.items()}
 
 
 def tokenizer_path(model_name: str) -> str:
@@ -252,6 +241,8 @@ def example_rows(example: dict, model: Model, cache_dir: Path) -> list[dict]:
     path = example_cache(example, cache_dir)
     if path.exists():
         return load_rows(path)
+    if not Path(example["audio"]).exists():
+        return []
     audio, sr = sf.read(example["audio"], dtype="float32")
     if audio.ndim > 1:
         audio = audio.mean(axis=1)
@@ -287,14 +278,25 @@ class Head(nn.Module):
         return -likelihood.sum() / (labels + 1).sum()
 
 
+def batch_cells(batch: list[dict]) -> int:
+    frames = max(len(r["features"]) for r in batch)
+    labels = max(len(r["tokens"]) for r in batch) + 1
+    return len(batch) * frames * labels
+
+
 def batches(rows: list[dict], rng: random.Random) -> list[list[dict]]:
     """Groups similar lengths, since padding to the longest clip dominates step time."""
     rows = rows[:]
     rng.shuffle(rows)
     out = []
     for i in range(0, len(rows), BATCH * 8):
-        group = sorted(rows[i : i + BATCH * 8], key=lambda r: len(r["features"]))
-        out += [group[j : j + BATCH] for j in range(0, len(group), BATCH)]
+        batch = []
+        for row in sorted(rows[i : i + BATCH * 8], key=lambda r: len(r["features"])):
+            if batch and (len(batch) == BATCH or batch_cells(batch + [row]) > MAX_BATCH_CELLS):
+                out.append(batch)
+                batch = []
+            batch.append(row)
+        out.append(batch)
     rng.shuffle(out)
     return out
 
@@ -392,5 +394,6 @@ def run(job_path: Path, model, model_name: str) -> None:
     used = {word_cache(word, voices, cache_dir) for word in words}
     used |= {example_cache(example, cache_dir) for example in job["examples"]}
     for cached in cache_dir.glob("*/*.npz"):
-        if cached not in used:
+        # Dotfiles are another run's writes in progress
+        if cached not in used and not cached.name.startswith("."):
             cached.unlink(missing_ok=True)
