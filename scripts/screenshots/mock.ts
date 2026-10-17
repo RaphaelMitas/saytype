@@ -33,8 +33,6 @@ mockIPC(
           selected_id: "clean_up",
           prompts: [
             { id: "clean_up", name: "Clean up", text: "", builtin: true, edited: false },
-            { id: "polished", name: "Polished", text: "", builtin: true, edited: false },
-            { id: "email", name: "Email", text: "", builtin: true, edited: false },
             { id: "custom_1", name: "Commit message", text: "", builtin: false, edited: false },
           ],
           timeout_secs: 8,

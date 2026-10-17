@@ -21,59 +21,21 @@ struct Builtin {
     text: &'static str,
 }
 
-const BUILTINS: &[Builtin] = &[
-    Builtin {
-        id: "clean_up",
-        name: "Clean up",
-        text: "Fix punctuation, capitalization and obvious transcription errors.
+const BUILTINS: &[Builtin] = &[Builtin {
+    id: "clean_up",
+    name: "Clean up",
+    text: "Fix spelling, capitalization and punctuation. End each sentence with a period, question mark or exclamation mark.
+Write numbers as digits: \"twenty-five\" becomes \"25\", \"ten percent\" becomes \"10%\", \"five dollars\" becomes \"$5\".
+Turn spoken punctuation into symbols: \"period\" becomes \".\", \"comma\" becomes \",\", \"new line\" starts a new line.
 Remove filler words like um and uh, and words repeated by accident.
-Write numbers, dates and times as digits where that reads naturally.
-Turn spoken punctuation like \"comma\" or \"new line\" into the symbol.
 Keep the speaker's words, word order and language. Don't rephrase.
-Example: \"um so we should uh ship it on friday right\" becomes \"So we should ship it on Friday, right?\"",
-    },
-    Builtin {
-        id: "polished",
-        name: "Polished",
-        text: "Rewrite the transcript into clear, well-formed sentences.
-Fix grammar, punctuation and capitalization. Remove filler words and false starts.
-Keep the meaning, tone and language. Don't add anything the speaker didn't say.",
-    },
-    Builtin {
-        id: "casual",
-        name: "Casual message",
-        text: "Turn the transcript into a short chat message in the speaker's own voice.
-Fix punctuation lightly and remove filler words. Keep it casual.
-Keep the language.",
-    },
-    Builtin {
-        id: "email",
-        name: "Email",
-        text: "Format the transcript as an email body in short paragraphs.
-Fix grammar and punctuation and remove filler words.
-Keep a greeting or sign-off if the speaker said one, never invent one.
-Keep the language.",
-    },
-    Builtin {
-        id: "bullets",
-        name: "Bullet list",
-        text: "Turn the transcript into a bullet list with one point per line, each starting with \"- \".
-Keep the speaker's wording and every point they made. Drop filler words and words like first or then.
-Example: \"so first buy milk and then uh call mom\" becomes:
-- Buy milk
-- Call mom
-Keep the language.",
-    },
-    Builtin {
-        id: "technical",
-        name: "Technical",
-        text: "Clean up a transcript about software.
-Fix punctuation and remove filler words.
-Write code identifiers, file names, commands and acronyms the way they're usually written, \
-like camelCase, snake_case, npm or API.
-Keep the speaker's words and language.",
-    },
-];
+Example: \"um so we should uh ship it on friday right\" becomes \"So we should ship it on Friday, right?\"
+Example: \"hey uhh what is the um time\" becomes \"Hey, what is the time?\"
+Example: \"ähm kannst du mir die datei äh bis morgen schicken\" becomes \"Kannst du mir die Datei bis morgen schicken?\"
+Example: \"hi anna comma new line thanks for the notes period\" becomes:
+Hi Anna,
+Thanks for the notes.",
+}];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomPrompt {
