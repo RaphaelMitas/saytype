@@ -10,12 +10,13 @@ Saytype is a macOS menu bar app for push-to-talk speech-to-text. Hold the Right 
 
 ```bash
 # Development (hot reload for frontend, requires restart for Rust changes)
+# Builds the Python sidecar first if src-tauri/binaries has none for this host
 pnpm tauri dev
 
 # Production build (creates Saytype.app)
 pnpm tauri build
 
-# Build Python sidecar (required before first run)
+# Rebuild Python sidecar (after changing sidecar/)
 cd sidecar && ./build.sh
 ```
 
