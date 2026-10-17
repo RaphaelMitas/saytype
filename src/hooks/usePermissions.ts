@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 
 export type Platform = "macos" | "windows" | "unknown";
 
@@ -45,16 +45,7 @@ export function usePermissions() {
     setPermissions((prev) => prev && { ...prev, microphone });
   }, []);
 
-  useEffect(() => {
-    refresh();
-    // Focus is when the user comes back from System Settings
-    const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (focused) refresh();
-    });
-    return () => {
-      unlisten.then((f) => f());
-    };
-  }, [refresh]);
+  useRefreshOnFocus(refresh);
 
   return { permissions, refresh, requestMicrophone };
 }

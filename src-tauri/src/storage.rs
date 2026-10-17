@@ -28,14 +28,20 @@ pub fn read_json<T: DeserializeOwned + Default>(path: &Path) -> T {
         .unwrap_or_default()
 }
 
+/// Renamed into place, so a concurrent read never sees a half-written file
 pub fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    // Resolved, so the rename updates a symlink's target instead of replacing the link
+    let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create {parent:?}: {e}"))?;
     }
     let json = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, json).map_err(|e| format!("Failed to write {tmp:?}: {e}"))?;
-    std::fs::rename(&tmp, path).map_err(|e| format!("Failed to write {path:?}: {e}"))
+    if let Ok(meta) = std::fs::metadata(&path) {
+        let _ = std::fs::set_permissions(&tmp, meta.permissions());
+    }
+    std::fs::rename(&tmp, &path).map_err(|e| format!("Failed to write {path:?}: {e}"))
 }
 
 /// Falls back to copying when the temp dir sits on another volume

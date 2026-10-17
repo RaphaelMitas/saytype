@@ -136,15 +136,12 @@ pub fn get_history() -> Result<History, String> {
 #[tauri::command]
 pub fn set_keep_history(keep: bool) -> Result<(), String> {
     let dir = dir()?;
-    let _guard = lock();
-    let mut config = config::load_config();
-    config.history_off = !keep;
-    config::save_config(&config)?;
+    config::update(|config| config.history_off = !keep)?;
     if keep {
-        Ok(())
-    } else {
-        clear(&dir)
+        return Ok(());
     }
+    let _guard = lock();
+    clear(&dir)
 }
 
 #[tauri::command]

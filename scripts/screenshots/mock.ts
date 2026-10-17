@@ -2,6 +2,7 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { Permissions, Platform } from "@/hooks/usePermissions";
 import type { History } from "@/lib/history";
 import { DEFAULT_PORT, type NetworkConfig } from "@/lib/network";
+import type { PostProcessing } from "@/lib/postProcessing";
 import type { VocabStatus, WordView } from "@/lib/words";
 
 const word = (word: string, learned = true): WordView => ({
@@ -79,6 +80,17 @@ mockIPC(
             },
           ],
         } satisfies History;
+      case "get_post_processing":
+        return {
+          enabled: true,
+          availability: "available",
+          selected_id: "clean_up",
+          prompts: [
+            { id: "clean_up", name: "Clean up", text: "", builtin: true, edited: false },
+            { id: "custom_1", name: "Commit message", text: "", builtin: false, edited: false },
+          ],
+          timeout_secs: 8,
+        } satisfies PostProcessing;
     }
   },
   { shouldMockEvents: true },

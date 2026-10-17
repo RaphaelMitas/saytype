@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 /// Modifier key enum for hotkey configuration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -124,6 +125,8 @@ pub struct AppConfig {
     #[serde(default)]
     pub preview: PreviewStyle,
     #[serde(default)]
+    pub post_processing: crate::post_processing::Settings,
+    #[serde(default)]
     pub words: Vec<Word>,
     /// Negative so configs from before History existed, and fresh installs, keep it on
     #[serde(default)]
@@ -190,12 +193,30 @@ pub fn load_config() -> AppConfig {
     crate::e2e::apply_mode_override(AppConfig::default())
 }
 
-/// Save configuration to disk
-pub fn save_config(config: &AppConfig) -> Result<(), String> {
+fn save_config(config: &AppConfig) -> Result<(), String> {
     let path = config_path()?;
     crate::storage::write_json(&path, config)?;
     println!("[CONFIG] Saved config to {:?}", path);
     Ok(())
+}
+
+pub fn update(change: impl FnOnce(&mut AppConfig)) -> Result<(), String> {
+    try_update(|config| {
+        change(config);
+        Ok(())
+    })
+}
+
+/// Saves nothing when `change` fails
+pub fn try_update<T>(
+    change: impl FnOnce(&mut AppConfig) -> Result<T, String>,
+) -> Result<T, String> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut config = load_config();
+    let result = change(&mut config)?;
+    save_config(&config)?;
+    Ok(result)
 }
 
 /// Map JavaScript event.code to platform keycode

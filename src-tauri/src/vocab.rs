@@ -470,10 +470,11 @@ pub fn get_vocab_status() -> Status {
 
 #[tauri::command]
 pub fn add_word(app_handle: tauri::AppHandle, word: String) -> Result<Vec<WordView>, String> {
-    let mut config = config::load_config();
-    let word = clean_word(&word, &config.words)?;
-    config.words.push(Word { word, say_as: None });
-    config::save_config(&config)?;
+    config::try_update(|config| {
+        let word = clean_word(&word, &config.words)?;
+        config.words.push(Word { word, say_as: None });
+        Ok(())
+    })?;
     changed(&app_handle);
     current_views()
 }
@@ -481,14 +482,15 @@ pub fn add_word(app_handle: tauri::AppHandle, word: String) -> Result<Vec<WordVi
 /// Examples go with the word unless another listed word still uses them
 #[tauri::command]
 pub fn remove_word(app_handle: tauri::AppHandle, word: String) -> Result<Vec<WordView>, String> {
-    let mut config = config::load_config();
-    config.words.retain(|w| w.word != word);
-    config::save_config(&config)?;
+    let words = config::try_update(|config| {
+        config.words.retain(|w| w.word != word);
+        Ok(config.words.clone())
+    })?;
 
     let vocab = vocab_dir()?;
     let (kept, gone): (Vec<_>, Vec<_>) = read_examples(&vocab)
         .into_iter()
-        .partition(|e| config.words.iter().any(|w| mentions(&e.text, &w.word)));
+        .partition(|e| words.iter().any(|w| mentions(&e.text, &w.word)));
     storage::write_json(&examples_index(&vocab), &kept)?;
     for example in gone {
         let _ = std::fs::remove_file(example_audio(&vocab, &example.id));
@@ -509,18 +511,19 @@ pub fn set_say_as(
     if say_as.as_deref().is_some_and(|s| s.starts_with('-')) {
         return Err("A pronunciation can't start with a dash".to_string());
     }
-    let mut config = config::load_config();
-    let entry = config
-        .words
-        .iter_mut()
-        .find(|w| w.word == word)
-        .ok_or("That word is no longer in your list")?;
-    if entry.say_as == say_as {
-        return current_views();
+    let edited = config::try_update(|config| {
+        let entry = config
+            .words
+            .iter_mut()
+            .find(|w| w.word == word)
+            .ok_or("That word is no longer in your list")?;
+        let edited = entry.say_as != say_as;
+        entry.say_as = say_as;
+        Ok(edited)
+    })?;
+    if edited {
+        changed(&app_handle);
     }
-    entry.say_as = say_as;
-    config::save_config(&config)?;
-    changed(&app_handle);
     current_views()
 }
 
@@ -620,38 +623,44 @@ pub fn teach_from_history(
 ) -> Result<Taught, String> {
     // A word fixed twice in the draft only counts in the spelling the line ended up with
     let words: Vec<&String> = words.iter().filter(|w| mentions(&text, w)).collect();
-    let mut config = config::load_config();
-    let mut added = 0;
-    for word in &words {
-        match find_word(&config.words, word) {
-            // The example would teach the other spelling
-            Some(listed) if listed.word != collapse_whitespace(word) => {
-                return Err(format!(
-                    "{} is in your words as {}. Fix it with that spelling.",
-                    word.trim(),
-                    listed.word
-                ));
-            }
-            Some(_) => {}
-            None => {
-                let word = clean_word(word, &config.words)?;
-                config.words.push(Word { word, say_as: None });
-                added += 1;
-            }
-        }
-    }
-
     let copy = std::env::temp_dir().join(format!("saytype-example-{}.wav", storage::new_id()));
     history::copy_recording(&id, &copy)?;
+    let added = config::try_update(|config| {
+        let mut added = 0;
+        for word in &words {
+            match find_word(&config.words, word) {
+                // The example would teach the other spelling
+                Some(listed) if listed.word != collapse_whitespace(word) => {
+                    return Err(format!(
+                        "{} is in your words as {}. Fix it with that spelling.",
+                        word.trim(),
+                        listed.word
+                    ));
+                }
+                Some(_) => {}
+                None => {
+                    let word = clean_word(word, &config.words)?;
+                    config.words.push(Word { word, say_as: None });
+                    added += 1;
+                }
+            }
+        }
+        Ok(added)
+    });
+    let added = match added {
+        Ok(added) => added,
+        Err(e) => {
+            let _ = std::fs::remove_file(&copy);
+            return Err(e);
+        }
+    };
+
     let fits = audio::wav_seconds(&copy).is_some_and(|s| s <= MAX_EXAMPLE_SECONDS);
     let example_saved = fits && !words.is_empty();
     if example_saved {
         add_example(&vocab_dir()?, &copy, &text, Source::History)?;
     } else {
         let _ = std::fs::remove_file(&copy);
-    }
-    if added > 0 {
-        config::save_config(&config)?;
     }
     if added > 0 || example_saved {
         changed(&app_handle);
