@@ -341,9 +341,8 @@ def main():
     if args.vocab_dir:
         _vocab_head = VocabHead(args.vocab_dir / "head.safetensors")
 
-    if not args.train:
-        # MLX keeps freed GPU buffers up to ~RAM size, and each new recording length adds more
-        mx.set_cache_limit(512 << 20)
+    # MLX keeps freed GPU buffers up to ~RAM size, and each new input shape adds more
+    mx.set_cache_limit(512 << 20)
 
     if args.train:
         try:
