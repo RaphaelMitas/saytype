@@ -791,7 +791,10 @@ mod tests {
         std::fs::write(head_meta(&vocab), meta).unwrap();
 
         assert!(!needs_training(&vocab, &words));
-        assert!(needs_training(&vocab, &[word("Flatsby"), word("Photopipe")]));
+        assert!(needs_training(
+            &vocab,
+            &[word("Flatsby"), word("Photopipe")]
+        ));
         assert!(
             needs_training(&vocab, &[]),
             "an empty list still has a head to remove"

@@ -341,6 +341,9 @@ def main():
     if args.vocab_dir:
         _vocab_head = VocabHead(args.vocab_dir / "head.safetensors")
 
+    # MLX keeps freed GPU buffers up to ~RAM size, and each new input shape adds more
+    mx.set_cache_limit(512 << 20)
+
     if args.train:
         try:
             vocab_trainer.run(args.train, load_model(model_name), model_name)
