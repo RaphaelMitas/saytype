@@ -13,7 +13,7 @@ on:
 
 jobs:
   build-macos:
-    runs-on: macos-15  # ARM64 runner (Apple Silicon)
+    runs-on: macos-26  # ARM64 runner (Apple Silicon)
     permissions:
       contents: write
     steps:
@@ -134,7 +134,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: '26'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -177,7 +177,7 @@ jobs:
 
   # macOS so the UI renders in the system font, as it does in the app
   screenshots:
-    runs-on: macos-15
+    runs-on: macos-26
     # A failed capture shouldn't hold back signed builds and the Homebrew tap
     continue-on-error: true
     timeout-minutes: 15
@@ -190,7 +190,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: '26'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
