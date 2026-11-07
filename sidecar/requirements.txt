@@ -3,7 +3,7 @@
 # Parakeet MLX for Apple Silicon optimized transcription
 # State-of-the-art accuracy, optimized for Apple Silicon via MLX
 # Pinned to a minor: vocab_trainer.py trains its decoder and joint modules directly
-parakeet-mlx~=0.5.3
+parakeet-mlx~=0.7.0
 
 # Tokenizes custom words for training, with the model's own tokenizer.model
 sentencepiece>=0.2.0
